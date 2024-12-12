@@ -4,8 +4,7 @@ import edgedb
 import datetime
 
 from http import HTTPStatus
-from typing import List
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from .queries import (

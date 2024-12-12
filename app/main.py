@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app import users, events
+from app import users, events, ui
 
 
 fast_api = FastAPI()
@@ -16,5 +16,6 @@ fast_api.add_middleware(
     allow_headers=["*"],
 )
 
+fast_api.include_router(ui.router)
 fast_api.include_router(users.router)
 fast_api.include_router(events.router)
