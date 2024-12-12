@@ -14,10 +14,10 @@ from .queries import (
     update_user_async_edgeql as update_user_qry,
     delete_user_async_edgeql as delete_user_qry,
 )
+from .edgedb_client import client
 
 
 router = APIRouter()
-client = edgedb.create_async_client()
 
 
 class RequestData(BaseModel):
@@ -37,7 +37,7 @@ async def get_users(
         users = await get_users_qry.get_users(client)
         return users
     else:
-        user = await get_user_by_name_qry.get_user_by_name(client, name)
+        user = await get_user_by_name_qry.get_user_by_name(client, name=name)
         if not user:
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,

@@ -11,10 +11,9 @@ from pydantic import BaseModel
 from .queries import (
     create_event_async_edgeql as create_event_qry,
 )
-
+from .edgedb_client import client
 
 router = APIRouter()
-client = edgedb.create_async_client()
 
 
 class RequestData(BaseModel):
