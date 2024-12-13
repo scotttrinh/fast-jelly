@@ -27,7 +27,6 @@ def render(request: Request) -> RendererFunction:
     """FastAPI dependency that returns an HTMY renderer function."""
 
     async def exec(component: Component) -> HTMLResponse:
-        # TODO: Get user from cookies->database
         auth_token = request.cookies.get("edgedb_auth_token")
         user: User | None = None
         if auth_token:
@@ -152,7 +151,6 @@ def SignInPage(_: Any, context: Context) -> Component:
             ),
         ),
     )
-
 
 @component
 def VerifyPage(_: Any, context: Context) -> Component:
