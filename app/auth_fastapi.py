@@ -2,11 +2,11 @@ import edgedb
 import jwt
 import datetime
 
-from typing import Union
+from typing import Optional
 from fastapi import Response, Request
 
 from .auth_core import (
-    EmailPassword as CoreEmailPassword,
+    make_email_password as make_core_email_password,
     EmailPasswordBody,
     EmailPasswordResponse,
 )
@@ -32,8 +32,9 @@ async def get_body(request: Request) -> EmailPasswordBody:
 
 
 class EmailPassword:
-    def __init__(self, *, verify_url: str, auth_ext_url: str):
-        self.auth_ext_url = auth_ext_url
+
+    def __init__(self, *, client: edgedb.AsyncIOClient, verify_url: str):
+        self.client = client
         self.verify_url = verify_url
 
     async def handle_sign_up(
@@ -41,8 +42,8 @@ class EmailPassword:
         request: Request,
         response: Response,
     ) -> EmailPasswordResponse:
-        email_password_client = CoreEmailPassword(
-            auth_ext_url=self.auth_ext_url, verify_url=self.verify_url
+        email_password_client = await make_core_email_password(
+            client=self.client, verify_url=self.verify_url
         )
         body = await get_body(request)
         sign_up_response = await email_password_client.sign_up(
@@ -50,8 +51,7 @@ class EmailPassword:
         )
         if sign_up_response.status == "complete":
             auth_token = sign_up_response.token_data.auth_token
-            jwt_payload = jwt.decode(auth_token, options={"verify_signature": False})
-            expiration_time = datetime.datetime.fromtimestamp(jwt_payload["exp"])
+            expiration_time = get_unchecked_exp(auth_token)
             response.set_cookie(
                 key="edgedb_auth_token",
                 value=auth_token,
@@ -67,8 +67,8 @@ class EmailPassword:
         request: Request,
         response: Response,
     ) -> EmailPasswordResponse:
-        email_password_client = CoreEmailPassword(
-            auth_ext_url=self.auth_ext_url, verify_url=self.verify_url
+        email_password_client = await make_core_email_password(
+            client=self.client, verify_url=self.verify_url
         )
         body = await get_body(request)
         sign_in_response = await email_password_client.sign_in(
@@ -76,8 +76,7 @@ class EmailPassword:
         )
         if sign_in_response.status == "complete":
             auth_token = sign_in_response.token_data.auth_token
-            jwt_payload = jwt.decode(auth_token, options={"verify_signature": False})
-            expiration_time = datetime.datetime.fromtimestamp(jwt_payload["exp"])
+            expiration_time = get_unchecked_exp(auth_token)
             response.set_cookie(
                 key="edgedb_auth_token",
                 value=auth_token,
@@ -90,12 +89,13 @@ class EmailPassword:
 
 
 def make_email_password(
-    client: Union[edgedb.Client, edgedb.AsyncIOClient], *, verify_url: str
+    client: edgedb.AsyncIOClient, *, verify_url: str
 ) -> EmailPassword:
-    pool = client._impl
-    host, port = pool._working_addr
-    params = pool._working_params
-    proto = "http" if params.tls_security == "insecure" else "https"
-    branch = params.branch
-    auth_ext_url = f"{proto}://{host}:{port}/branch/{branch}/ext/auth/"
-    return EmailPassword(auth_ext_url=auth_ext_url, verify_url=verify_url)
+    return EmailPassword(client=client, verify_url=verify_url)
+
+
+def get_unchecked_exp(token: str) -> Optional[datetime.datetime]:
+    jwt_payload = jwt.decode(token, options={"verify_signature": False})
+    if "exp" not in jwt_payload:
+        return None
+    return datetime.datetime.fromtimestamp(jwt_payload["exp"], tz=datetime.timezone.utc)

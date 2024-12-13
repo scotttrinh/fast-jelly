@@ -5,9 +5,23 @@ import hashlib
 import base64
 import httpx
 import uuid
+import edgedb
+import logging
+import sys
 
+from urllib.parse import urljoin
 from typing import Literal, Union
 from pydantic import BaseModel
+
+
+logger = logging.getLogger("gel_auth")
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setFormatter(formatter)
+
+logger.addHandler(stream_handler)
 
 
 class PKCE:
@@ -23,15 +37,18 @@ class PKCE:
 
     async def exchange_code_for_token(self, code: str) -> TokenData:
         async with httpx.AsyncClient() as http_client:
-            token_response = await http_client.post(
-                f"{self.base_url}/token",
-                json={
+            url = urljoin(self.base_url, "token")
+            logger.info(f"Exchanging code for token: {url}")
+            token_response = await http_client.get(
+                url,
+                params={
                     "code": code,
                     "verifier": self.verifier,
                 },
             )
 
-            token_json = await token_response.json()
+            logger.info(f"Token response: {token_response.text}")
+            token_json = token_response.json()
             return TokenData(
                 auth_token=token_json["auth_token"],
                 identity_id=token_json["identity_id"],
@@ -83,6 +100,21 @@ class LocalIdentity(BaseModel):
     id: str
 
 
+async def make_email_password(
+    *,
+    client: edgedb.AsyncIOClient,
+    verify_url: str,
+) -> EmailPassword:
+    await client.ensure_connected()
+    pool = client._impl
+    host, port = pool._working_addr
+    params = pool._working_params
+    proto = "http" if params.tls_security == "insecure" else "https"
+    branch = params.branch
+    auth_ext_url = f"{proto}://{host}:{port}/branch/{branch}/ext/auth/"
+    return EmailPassword(auth_ext_url=auth_ext_url, verify_url=verify_url)
+
+
 class EmailPassword:
 
     def __init__(
@@ -98,8 +130,10 @@ class EmailPassword:
     async def sign_up(self, email: str, password: str) -> EmailPasswordResponse:
         pkce = generate_pkce(self.auth_ext_url)
         async with httpx.AsyncClient() as http_client:
+            url = urljoin(self.auth_ext_url, "register")
+            logger.info(f"Registering user {email}: {url}")
             register_response = await http_client.post(
-                f"{self.auth_ext_url}/register",
+                url,
                 json={
                     "email": email,
                     "password": password,
@@ -109,21 +143,31 @@ class EmailPassword:
                 },
             )
 
-            register_json = await register_response.json()
+            logger.info(f"Register response: {register_response.text}")
+            register_json = register_response.json()
             # If there is a "code" key in the response JSON, we can exchange
             # for a token. Otherwise, we need to wait for the email
             # verification flow to complete
-            if "code" in register_json:
-                # Exchange for a token
-                token_data = await pkce.exchange_code_for_token(
-                    register_json["code"],
-                )
+            if "error" in register_json:
+                logger.error(f"Register error: {register_json['error']}")
+                raise Exception(f"Register error: {register_json['error']}")
+            elif "code" in register_json:
+                code = register_json["code"]
+                logger.info(f"Exchanging code for token: {code}")
+                token_data = await pkce.exchange_code_for_token(code)
+
+                logger.info(f"PKCE verifier: {pkce.verifier}")
+                logger.info(f"Token data: {token_data}")
                 return EmailPasswordCompleteResponse(
                     status="complete",
                     verifier=pkce.verifier,
                     token_data=token_data,
                 )
             else:
+                logger.info(
+                    "No code in register response, assuming verification required"
+                )
+                logger.info(f"PKCE verifier: {pkce.verifier}")
                 return EmailPasswordVerificationRequiredResponse(
                     status="verification_required",
                     verifier=pkce.verifier,
@@ -133,8 +177,10 @@ class EmailPassword:
     async def sign_in(self, email: str, password: str) -> EmailPasswordResponse:
         pkce = generate_pkce(self.auth_ext_url)
         async with httpx.AsyncClient() as http_client:
+            url = urljoin(self.auth_ext_url, "authenticate")
+            logger.info(f"Signing in user {email}: {url}")
             sign_in_response = await http_client.post(
-                f"{self.auth_ext_url}/authenticate",
+                url,
                 json={
                     "email": email,
                     "provider": "builtin::local_emailpassword",
@@ -143,17 +189,28 @@ class EmailPassword:
                 },
             )
 
-            sign_in_json = await sign_in_response.json()
-            if "code" in sign_in_json:
-                token_data = await pkce.exchange_code_for_token(
-                    sign_in_json["code"],
-                )
+            logger.info(f"Sign in response: {sign_in_response.text}")
+            sign_in_json = sign_in_response.json()
+            if "error" in sign_in_json:
+                logger.error(f"Sign in error: {sign_in_json['error']}")
+                raise Exception(f"Sign in error: {sign_in_json['error']}")
+            elif "code" in sign_in_json:
+                code = sign_in_json["code"]
+                logger.info(f"Exchanging code for token: {code}")
+                token_data = await pkce.exchange_code_for_token(code)
+
+                logger.info(f"PKCE verifier: {pkce.verifier}")
+                logger.info(f"Token data: {token_data}")
                 return EmailPasswordCompleteResponse(
                     status="complete",
                     verifier=pkce.verifier,
                     token_data=token_data,
                 )
             else:
+                logger.info(
+                    "No code in sign in response, assuming verification required"
+                )
+                logger.info(f"PKCE verifier: {pkce.verifier}")
                 return EmailPasswordVerificationRequiredResponse(
                     status="verification_required",
                     verifier=pkce.verifier,
