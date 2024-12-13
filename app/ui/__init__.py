@@ -115,20 +115,21 @@ def SignInPage(_: Any, context: Context) -> Component:
                             class_="mb-4",
                         ),
                         html.div(
-                            html.input_(
+                            html.button(
+                                "Sign in",
                                 type="submit",
-                                value="Sign in",
                                 class_="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 mb-2",
                             ),
                             html.button(
                                 "Sign up",
-                                action="/auth/register",
-                                method="post",
+                                type="submit",
+                                formaction="/api/auth/register",
+                                formmethod="post",
                                 class_="w-full bg-slate-600 text-white font-bold py-2 px-4 rounded hover:bg-slate-700",
                             ),
                             class_="flex flex-col gap-2",
                         ),
-                        action="/auth/login",
+                        action="/api/auth/authenticate",
                         method="post",
                         class_="bg-slate-800 p-6 rounded-lg shadow-lg w-80",
                     ),
