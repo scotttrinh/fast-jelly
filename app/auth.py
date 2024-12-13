@@ -16,7 +16,11 @@ router = APIRouter()
 email_password = make_email_password(client, verify_url="http://localhost:5001/verify")
 
 
-@router.post("/auth/register")
+@router.post(
+    "/auth/register",
+    response_class=RedirectResponse,
+    status_code=HTTPStatus.SEE_OTHER,
+)
 async def register(
     email: Annotated[str, Form()],
     sign_up_response: Annotated[
@@ -31,22 +35,23 @@ async def register(
         )
         print(f"Created user: {json.dumps(user, default=str)}")
 
-        return RedirectResponse(url="/", status_code=HTTPStatus.SEE_OTHER)
-    else:
-        return RedirectResponse(
-            url="/signin?error=verification_required", status_code=HTTPStatus.SEE_OTHER
-        )
+        return "/"
+
+    return "/signin?error=verification_required"
 
 
-@router.post("/auth/authenticate")
+@router.post(
+    "/auth/authenticate",
+    response_class=RedirectResponse,
+    status_code=HTTPStatus.SEE_OTHER,
+)
 async def authenticate(
     sign_in_response: Annotated[
         EmailPasswordResponse, Depends(email_password.handle_sign_in)
     ],
 ):
-    if sign_in_response.status == "complete":
-        return RedirectResponse(url="/", status_code=HTTPStatus.SEE_OTHER)
-    else:
-        return RedirectResponse(
-            url="/signin?error=verification_required", status_code=HTTPStatus.SEE_OTHER
-        )
+    return (
+        "/"
+        if sign_in_response.status == "complete"
+        else "/signin?error=verification_required"
+    )
