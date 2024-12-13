@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import datetime
-import uuid
-
 from typing import Any, Callable, Awaitable, Annotated
 from htmy import Context, Component, html, component, HTMY
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 
 from ..users import User
+from ..edgedb_client import client
+from ..queries import get_current_user_async_edgeql as get_current_user_qry
 from .components import Heading, head
 
 router = APIRouter()
@@ -29,11 +28,17 @@ def render(request: Request) -> RendererFunction:
 
     async def exec(component: Component) -> HTMLResponse:
         # TODO: Get user from cookies->database
-        user = User(
-            created_at=datetime.datetime.now(),
-            id=uuid.uuid4(),
-            name="test",
-        )
+        auth_token = request.cookies.get("edgedb_auth_token")
+        user: User | None = None
+        if auth_token:
+            auth_client = client.with_globals({"ext::auth::client_token": auth_token})  # type: ignore
+            user_result = await get_current_user_qry.get_current_user(auth_client)  # type: ignore
+            if user_result:
+                user = User(
+                    created_at=user_result.created_at,
+                    id=user_result.id,
+                    name=user_result.name,
+                )
         htmy = HTMY(make_auth_context(request, user))
         return HTMLResponse(await htmy.render(component))
 
@@ -46,6 +51,8 @@ DependsRenderFunc = Annotated[RendererFunction, Depends(render)]
 @component
 def IndexPage(_: Any, context: Context) -> Component:
     user: User | None = context[User]
+    if user is None:
+        return html.meta(http_equiv="refresh", content="0; url=/signin")
     return (
         html.DOCTYPE.html,
         html.html(
@@ -71,23 +78,63 @@ def SignInPage(_: Any, context: Context) -> Component:
     return (
         html.DOCTYPE.html,
         html.html(
-            html.head(
-                # Some metadata
-                html.title("Sign in to Jellyroll"),
-                html.meta.charset(),
-                html.meta.viewport(),
-                # TailwindCSS
-                html.script(src="https://cdn.tailwindcss.com"),
-                # HTMX
-                html.script(src="https://unpkg.com/htmx.org@2.0.2"),
-            ),
+            head("Sign in to Jellyroll"),
             html.body(
-                # Page content: Sign in page
-                Heading("Sign in to Jellyroll"),
-                class_=(
-                    "h-screen w-screen flex flex-col items-center justify-center "
-                    "gap-4 bg-slate-800 text-white"
+                # Page content: Email and password sign in form
+                html.div(
+                    Heading("Sign in to Jellyroll"),
+                    html.form(
+                        html.div(
+                            html.label(
+                                "Email",
+                                for_="email",
+                                class_="block text-sm font-medium text-slate-300 mb-1 pl-2",
+                            ),
+                            html.input_(
+                                type="email",
+                                name="email",
+                                id="email",
+                                placeholder="Enter your email",
+                                class_="w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            ),
+                            class_="mb-4",
+                        ),
+                        html.div(
+                            html.label(
+                                "Password",
+                                for_="password",
+                                class_="block text-sm font-medium text-slate-300 mb-1 pl-2",
+                            ),
+                            html.input_(
+                                type="password",
+                                name="password",
+                                id="password",
+                                placeholder="Enter your password",
+                                class_="w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            ),
+                            class_="mb-4",
+                        ),
+                        html.div(
+                            html.input_(
+                                type="submit",
+                                value="Sign in",
+                                class_="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 mb-2",
+                            ),
+                            html.button(
+                                "Sign up",
+                                action="/auth/register",
+                                method="post",
+                                class_="w-full bg-slate-600 text-white font-bold py-2 px-4 rounded hover:bg-slate-700",
+                            ),
+                            class_="flex flex-col gap-2",
+                        ),
+                        action="/auth/login",
+                        method="post",
+                        class_="bg-slate-800 p-6 rounded-lg shadow-lg w-80",
+                    ),
+                    class_="flex flex-col items-center justify-center gap-4",
                 ),
+                class_="h-screen w-screen flex items-center justify-center bg-slate-900 text-white",
             ),
         ),
     )
@@ -125,11 +172,11 @@ async def index(render: DependsRenderFunc):
     return await render(IndexPage(None))
 
 
-@router.get("/ui/signin")
+@router.get("/signin")
 async def signin(render: DependsRenderFunc):
     return await render(SignInPage(None))
 
 
-@router.get("/ui/verify")
+@router.get("/verify")
 async def verify(render: DependsRenderFunc):
     return await render(VerifyPage(None))

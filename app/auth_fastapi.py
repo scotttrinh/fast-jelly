@@ -3,13 +3,32 @@ import jwt
 import datetime
 
 from typing import Union
-from fastapi import Response
+from fastapi import Response, Request
 
 from .auth_core import (
     EmailPassword as CoreEmailPassword,
     EmailPasswordBody,
     EmailPasswordResponse,
 )
+
+
+async def get_body(request: Request) -> EmailPasswordBody:
+    content_type = request.headers.get("content-type")
+    match content_type:
+        case "application/x-www-form-urlencoded" | "multipart/form-data":
+            form = await request.form()
+            body = EmailPasswordBody(
+                email=str(form.get("email")), password=str(form.get("password"))
+            )
+        case "application/json":
+            json_body = await request.json()
+            body = EmailPasswordBody(
+                email=json_body.get("email", ""),
+                password=json_body.get("password", ""),
+            )
+        case _:
+            raise ValueError("Unsupported content type")
+    return body
 
 
 class EmailPassword:
@@ -19,12 +38,13 @@ class EmailPassword:
 
     async def handle_sign_up(
         self,
-        body: EmailPasswordBody,
+        request: Request,
         response: Response,
     ) -> EmailPasswordResponse:
         email_password_client = CoreEmailPassword(
             auth_ext_url=self.auth_ext_url, verify_url=self.verify_url
         )
+        body = await get_body(request)
         sign_up_response = await email_password_client.sign_up(
             body.email, body.password
         )
@@ -44,12 +64,13 @@ class EmailPassword:
 
     async def handle_sign_in(
         self,
-        body: EmailPasswordBody,
+        request: Request,
         response: Response,
     ) -> EmailPasswordResponse:
         email_password_client = CoreEmailPassword(
             auth_ext_url=self.auth_ext_url, verify_url=self.verify_url
         )
+        body = await get_body(request)
         sign_in_response = await email_password_client.sign_in(
             body.email, body.password
         )
