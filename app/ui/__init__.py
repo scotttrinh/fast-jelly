@@ -75,6 +75,11 @@ def IndexPage(_: Any, context: Context) -> Component:
 
 @component
 def SignInPage(_: Any, context: Context) -> Component:
+    request: Request = context[Request]
+    error_message = request.query_params.get("error", "")
+    if error_message == "verification_required":
+        error_message = "Please verify your email address before signing in."
+
     return (
         html.DOCTYPE.html,
         html.html(
@@ -83,6 +88,14 @@ def SignInPage(_: Any, context: Context) -> Component:
                 # Page content: Email and password sign in form
                 html.div(
                     Heading("Sign in to Jellyroll"),
+                    html.div(
+                        error_message,
+                        class_=(
+                            "bg-red-500/30 border-l-2 border-red-500 text-white p-4 rounded mb-4"
+                            if error_message
+                            else "hidden"
+                        ),
+                    ),
                     html.form(
                         html.div(
                             html.label(
