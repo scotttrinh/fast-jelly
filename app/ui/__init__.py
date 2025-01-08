@@ -58,11 +58,7 @@ def IndexPage(_: Any, context: Context) -> Component:
             head("Jellyroll"),
             html.body(
                 # Page content: Index page
-                (
-                    Heading(f"Welcome, {user.name} to Jellyroll")
-                    if user
-                    else Heading("Who are you?")
-                ),
+                Heading(f"Welcome, {user.name} to Jellyroll"),
                 class_=(
                     "h-screen w-screen flex flex-col items-center justify-center "
                     "gap-4 bg-slate-800 text-white"
@@ -78,6 +74,8 @@ def SignInPage(_: Any, context: Context) -> Component:
     error_message = request.query_params.get("error", "")
     if error_message == "verification_required":
         error_message = "Please verify your email address before signing in."
+    if error_message == "missing_proof":
+        error_message = "Email verification complete. Please sign in."
 
     return (
         html.DOCTYPE.html,
@@ -135,45 +133,19 @@ def SignInPage(_: Any, context: Context) -> Component:
                             html.button(
                                 "Sign up",
                                 type="submit",
-                                formaction="/api/auth/register",
+                                formaction="/auth/register",
                                 formmethod="post",
                                 class_="w-full bg-slate-600 text-white font-bold py-2 px-4 rounded hover:bg-slate-700",
                             ),
                             class_="flex flex-col gap-2",
                         ),
-                        action="/api/auth/authenticate",
+                        action="/auth/authenticate",
                         method="post",
                         class_="bg-slate-800 p-6 rounded-lg shadow-lg w-80",
                     ),
                     class_="flex flex-col items-center justify-center gap-4",
                 ),
                 class_="h-screen w-screen flex items-center justify-center bg-slate-900 text-white",
-            ),
-        ),
-    )
-
-@component
-def VerifyPage(_: Any, context: Context) -> Component:
-    return (
-        html.DOCTYPE.html,
-        html.html(
-            html.head(
-                # Some metadata
-                html.title("Verifying your email"),
-                html.meta.charset(),
-                html.meta.viewport(),
-                # TailwindCSS
-                html.script(src="https://cdn.tailwindcss.com"),
-                # HTMX
-                html.script(src="https://unpkg.com/htmx.org@2.0.2"),
-            ),
-            html.body(
-                # Page content:
-                Heading("Verifying your email"),
-                class_=(
-                    "h-screen w-screen flex flex-col items-center justify-center "
-                    "gap-4 bg-slate-800 text-white"
-                ),
             ),
         ),
     )
@@ -187,8 +159,3 @@ async def index(render: DependsRenderFunc):
 @router.get("/signin")
 async def signin(render: DependsRenderFunc):
     return await render(SignInPage(None))
-
-
-@router.get("/verify")
-async def verify(render: DependsRenderFunc):
-    return await render(VerifyPage(None))

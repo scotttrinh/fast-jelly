@@ -2,17 +2,19 @@ import edgedb
 import jwt
 import datetime
 
-from typing import Optional
-from fastapi import Response, Request
+from typing import Optional, Annotated
+from fastapi import Response, Request, Query, Cookie
 
 from .auth_core import (
     make_email_password as make_core_email_password,
     EmailPasswordBody,
     EmailPasswordResponse,
+    EmailPasswordVerifyBody,
+    EmailVerificationResponse,
 )
 
 
-async def get_body(request: Request) -> EmailPasswordBody:
+async def get_email_password_body(request: Request) -> EmailPasswordBody:
     content_type = request.headers.get("content-type")
     match content_type:
         case "application/x-www-form-urlencoded" | "multipart/form-data":
@@ -25,6 +27,26 @@ async def get_body(request: Request) -> EmailPasswordBody:
             body = EmailPasswordBody(
                 email=json_body.get("email", ""),
                 password=json_body.get("password", ""),
+            )
+        case _:
+            raise ValueError("Unsupported content type")
+    return body
+
+
+async def get_email_password_verify_body(request: Request) -> EmailPasswordVerifyBody:
+    content_type = request.headers.get("content-type")
+    match content_type:
+        case "application/x-www-form-urlencoded" | "multipart/form-data":
+            form = await request.form()
+            body = EmailPasswordVerifyBody(
+                verification_token=str(form.get("verification_token")),
+                verifier=str(form.get("verifier")),
+            )
+        case "application/json":
+            json_body = await request.json()
+            body = EmailPasswordVerifyBody(
+                verification_token=json_body.get("verification_token", ""),
+                verifier=json_body.get("verifier", ""),
             )
         case _:
             raise ValueError("Unsupported content type")
@@ -45,9 +67,17 @@ class EmailPassword:
         email_password_client = await make_core_email_password(
             client=self.client, verify_url=self.verify_url
         )
-        body = await get_body(request)
+        body = await get_email_password_body(request)
         sign_up_response = await email_password_client.sign_up(
             body.email, body.password
+        )
+        response.set_cookie(
+            key="edgedb_verifier",
+            value=sign_up_response.verifier,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            expires=int(datetime.timedelta(days=7).total_seconds()),
         )
         if sign_up_response.status == "complete":
             auth_token = sign_up_response.token_data.auth_token
@@ -70,7 +100,7 @@ class EmailPassword:
         email_password_client = await make_core_email_password(
             client=self.client, verify_url=self.verify_url
         )
-        body = await get_body(request)
+        body = await get_email_password_body(request)
         sign_in_response = await email_password_client.sign_in(
             body.email, body.password
         )
@@ -86,6 +116,18 @@ class EmailPassword:
                 expires=expiration_time,
             )
         return sign_in_response
+
+    async def handle_verify_email(
+        self,
+        request: Request,
+        verification_token: Annotated[str, Query()],
+        verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")],
+        response: Response,
+    ) -> EmailVerificationResponse:
+        email_password_client = await make_core_email_password(
+            client=self.client, verify_url=self.verify_url
+        )
+        return await email_password_client.verify_email(verification_token, verifier)
 
 
 def make_email_password(

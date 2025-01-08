@@ -10,7 +10,7 @@ import logging
 import sys
 
 from urllib.parse import urljoin
-from typing import Literal, Union
+from typing import Literal, Union, Optional
 from pydantic import BaseModel
 
 
@@ -64,7 +64,7 @@ def generate_pkce(base_url: str) -> PKCE:
 
 class TokenData(BaseModel):
     auth_token: str
-    identity_id: uuid.UUID | None
+    identity_id: uuid.UUID
     provider_token: str | None
     provider_refresh_token: str | None
 
@@ -78,16 +78,38 @@ class EmailPasswordCompleteResponse(BaseModel):
     status: Literal["complete"]
     verifier: str
     token_data: TokenData
+    identity_id: uuid.UUID
 
 
 class EmailPasswordVerificationRequiredResponse(BaseModel):
     status: Literal["verification_required"]
     verifier: str
     token_data: None
+    identity_id: uuid.UUID | None
 
 
 EmailPasswordResponse = Union[
     EmailPasswordCompleteResponse, EmailPasswordVerificationRequiredResponse
+]
+
+
+class EmailPasswordVerifyBody(BaseModel):
+    verification_token: str
+    verifier: str
+
+
+class EmailVerificationCompleteResponse(BaseModel):
+    status: Literal["complete"]
+    token_data: TokenData
+
+
+class EmailVerificationMissingProofResponse(BaseModel):
+    status: Literal["missing_proof"]
+    token_data: None
+
+
+EmailVerificationResponse = Union[
+    EmailVerificationCompleteResponse, EmailVerificationMissingProofResponse
 ]
 
 
@@ -145,34 +167,33 @@ class EmailPassword:
 
             logger.info(f"Register response: {register_response.text}")
             register_json = register_response.json()
-            # If there is a "code" key in the response JSON, we can exchange
-            # for a token. Otherwise, we need to wait for the email
-            # verification flow to complete
-            if "error" in register_json:
-                logger.error(f"Register error: {register_json['error']}")
-                raise Exception(f"Register error: {register_json['error']}")
-            elif "code" in register_json:
-                code = register_json["code"]
-                logger.info(f"Exchanging code for token: {code}")
-                token_data = await pkce.exchange_code_for_token(code)
+            match register_json:
+                case {"error": error}:
+                    logger.error(f"Register error: {error}")
+                    raise Exception(f"Register error: {error}")
+                case {"code": code}:
+                    logger.info(f"Exchanging code for token: {code}")
+                    token_data = await pkce.exchange_code_for_token(code)
 
-                logger.info(f"PKCE verifier: {pkce.verifier}")
-                logger.info(f"Token data: {token_data}")
-                return EmailPasswordCompleteResponse(
-                    status="complete",
-                    verifier=pkce.verifier,
-                    token_data=token_data,
-                )
-            else:
-                logger.info(
-                    "No code in register response, assuming verification required"
-                )
-                logger.info(f"PKCE verifier: {pkce.verifier}")
-                return EmailPasswordVerificationRequiredResponse(
-                    status="verification_required",
-                    verifier=pkce.verifier,
-                    token_data=None,
-                )
+                    logger.info(f"PKCE verifier: {pkce.verifier}")
+                    logger.info(f"Token data: {token_data}")
+                    return EmailPasswordCompleteResponse(
+                        status="complete",
+                        verifier=pkce.verifier,
+                        token_data=token_data,
+                        identity_id=token_data.identity_id,
+                    )
+                case _:
+                    logger.info(
+                        "No code in register response, assuming verification required"
+                    )
+                    logger.info(f"PKCE verifier: {pkce.verifier}")
+                    return EmailPasswordVerificationRequiredResponse(
+                        status="verification_required",
+                        verifier=pkce.verifier,
+                        token_data=None,
+                        identity_id=register_json.get("identity_id"),
+                    )
 
     async def sign_in(self, email: str, password: str) -> EmailPasswordResponse:
         pkce = generate_pkce(self.auth_ext_url)
@@ -191,34 +212,71 @@ class EmailPassword:
 
             logger.info(f"Sign in response: {sign_in_response.text}")
             sign_in_json = sign_in_response.json()
-            if "error" in sign_in_json:
-                logger.error(f"Sign in error: {sign_in_json['error']}")
-                raise Exception(f"Sign in error: {sign_in_json['error']}")
-            elif "code" in sign_in_json:
-                code = sign_in_json["code"]
-                logger.info(f"Exchanging code for token: {code}")
-                token_data = await pkce.exchange_code_for_token(code)
+            match sign_in_json:
+                case {"error": error}:
+                    logger.error(f"Sign in error: {error}")
+                    raise Exception(f"Sign in error: {error}")
+                case {"code": code}:
+                    logger.info(f"Exchanging code for token: {code}")
+                    token_data = await pkce.exchange_code_for_token(code)
 
-                logger.info(f"PKCE verifier: {pkce.verifier}")
-                logger.info(f"Token data: {token_data}")
-                return EmailPasswordCompleteResponse(
-                    status="complete",
-                    verifier=pkce.verifier,
-                    token_data=token_data,
-                )
-            else:
-                logger.info(
-                    "No code in sign in response, assuming verification required"
-                )
-                logger.info(f"PKCE verifier: {pkce.verifier}")
-                return EmailPasswordVerificationRequiredResponse(
-                    status="verification_required",
-                    verifier=pkce.verifier,
-                    token_data=None,
-                )
+                    logger.info(f"PKCE verifier: {pkce.verifier}")
+                    logger.info(f"Token data: {token_data}")
+                    return EmailPasswordCompleteResponse(
+                        status="complete",
+                        verifier=pkce.verifier,
+                        token_data=token_data,
+                        identity_id=token_data.identity_id,
+                    )
+                case _:
+                    logger.info(
+                        "No code in sign in response, assuming verification required"
+                    )
+                    logger.info(f"PKCE verifier: {pkce.verifier}")
+                    return EmailPasswordVerificationRequiredResponse(
+                        status="verification_required",
+                        verifier=pkce.verifier,
+                        token_data=None,
+                        identity_id=sign_in_json.get("identity_id"),
+                    )
 
-    async def verify_email(self, verification_token: str, verifier: str) -> None:
-        pass
+    async def verify_email(
+        self, verification_token: str, verifier: Optional[str]
+    ) -> EmailVerificationResponse:
+        async with httpx.AsyncClient() as http_client:
+            url = urljoin(self.auth_ext_url, "verify")
+            logger.info(f"Verifying email: {url}")
+            verify_response = await http_client.post(
+                url,
+                json={
+                    "verification_token": verification_token,
+                    "provider": "builtin::local_emailpassword",
+                },
+            )
+            verify_json = verify_response.json()
+            match verify_json:
+                case {"error": error}:
+                    logger.error(f"Verify error: {error}")
+                    raise Exception(f"Verify error: {error}")
+                case {"code": code}:
+                    if verifier is None:
+                        return EmailVerificationMissingProofResponse(
+                            status="missing_proof", token_data=None
+                        )
+
+                    pkce = PKCE(verifier, base_url=self.auth_ext_url)
+                    logger.info(f"Exchanging code for token: {code}")
+                    token_data = await pkce.exchange_code_for_token(code)
+
+                    logger.info(f"PKCE verifier: {pkce.verifier}")
+                    logger.info(f"Token data: {token_data}")
+                    return EmailVerificationCompleteResponse(
+                        status="complete",
+                        token_data=token_data,
+                    )
+                case _:
+                    logger.error("No code in verify response")
+                    raise Exception("No code in verify response")
 
     async def send_reset_password_email(self, email: str) -> None:
         pass
