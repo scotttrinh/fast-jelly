@@ -80,15 +80,7 @@ class EmailPassword:
         )
         if sign_up_response.status == "complete":
             auth_token = sign_up_response.token_data.auth_token
-            expiration_time = get_unchecked_exp(auth_token)
-            response.set_cookie(
-                key="edgedb_auth_token",
-                value=auth_token,
-                httponly=True,
-                secure=True,
-                samesite="lax",
-                expires=expiration_time,
-            )
+            set_auth_cookie(auth_token, response)
         return sign_up_response
 
     async def handle_sign_in(
@@ -105,15 +97,7 @@ class EmailPassword:
         )
         if sign_in_response.status == "complete":
             auth_token = sign_in_response.token_data.auth_token
-            expiration_time = get_unchecked_exp(auth_token)
-            response.set_cookie(
-                key="edgedb_auth_token",
-                value=auth_token,
-                httponly=True,
-                secure=True,
-                samesite="lax",
-                expires=expiration_time,
-            )
+            set_auth_cookie(auth_token, response)
         return sign_in_response
 
     async def handle_verify_email(
@@ -140,3 +124,15 @@ def get_unchecked_exp(token: str) -> Optional[datetime.datetime]:
     if "exp" not in jwt_payload:
         return None
     return datetime.datetime.fromtimestamp(jwt_payload["exp"], tz=datetime.timezone.utc)
+
+
+def set_auth_cookie(token: str, response: Response) -> None:
+    exp = get_unchecked_exp(token)
+    response.set_cookie(
+        key="edgedb_auth_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        expires=exp,
+    )
