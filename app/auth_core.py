@@ -25,7 +25,6 @@ logger.addHandler(stream_handler)
 
 
 class PKCE:
-
     def __init__(self, verifier: str, *, base_url: str):
         self.base_url = base_url
         self.verifier = verifier
@@ -48,6 +47,7 @@ class PKCE:
             )
 
             logger.info(f"Token response: {token_response.text}")
+            token_response.raise_for_status()
             token_json = token_response.json()
             return TokenData(
                 auth_token=token_json["auth_token"],
@@ -113,6 +113,16 @@ EmailVerificationResponse = Union[
 ]
 
 
+class SendResetPasswordEmailCompleteResponse(BaseModel):
+    status: Literal["complete"]
+    verifier: str
+
+
+class ResetPasswordCompleteResponse(BaseModel):
+    status: Literal["complete"]
+    token_data: TokenData
+
+
 class EmailPasswordSignInBody(BaseModel):
     email: str
     password: str
@@ -138,7 +148,6 @@ async def make_email_password(
 
 
 class EmailPassword:
-
     def __init__(
         self,
         *,
@@ -166,6 +175,7 @@ class EmailPassword:
             )
 
             logger.info(f"Register response: {register_response.text}")
+            register_response.raise_for_status()
             register_json = register_response.json()
             match register_json:
                 case {"error": error}:
@@ -211,6 +221,7 @@ class EmailPassword:
             )
 
             logger.info(f"Sign in response: {sign_in_response.text}")
+            sign_in_response.raise_for_status()
             sign_in_json = sign_in_response.json()
             match sign_in_json:
                 case {"error": error}:
@@ -253,6 +264,7 @@ class EmailPassword:
                     "provider": "builtin::local_emailpassword",
                 },
             )
+            verify_response.raise_for_status()
             verify_json = verify_response.json()
             match verify_json:
                 case {"error": error}:
@@ -278,8 +290,65 @@ class EmailPassword:
                     logger.error("No code in verify response")
                     raise Exception("No code in verify response")
 
-    async def send_reset_password_email(self, email: str) -> None:
-        pass
+    async def send_reset_password_email(
+        self, email: str, reset_url: str
+    ) -> SendResetPasswordEmailCompleteResponse:
+        pkce = generate_pkce(self.auth_ext_url)
+        async with httpx.AsyncClient() as http_client:
+            url = urljoin(self.auth_ext_url, "send-reset-email")
+            reset_response = await http_client.post(
+                url,
+                json={
+                    "email": email,
+                    "provider": "builtin::local_emailpassword",
+                    "challenge": pkce.challenge,
+                    "reset_url": reset_url,
+                },
+            )
 
-    async def reset_password(self, reset_token: str, password: str) -> None:
-        pass
+            logger.info(f"Reset response: {reset_response.text}")
+            reset_response.raise_for_status()
+            reset_json = reset_response.json()
+            match reset_json:
+                case {"error": error}:
+                    logger.error(f"Reset error: {error}")
+                    raise Exception(f"Reset error: {error}")
+                case _:
+                    logger.info(f"PKCE verifier: {pkce.verifier}")
+                    logger.info(f"Reset response: {reset_json}")
+                    return SendResetPasswordEmailCompleteResponse(
+                        status="complete",
+                        verifier=pkce.verifier,
+                    )
+
+    async def reset_password(
+        self, reset_token: str, verifier: str, password: str
+    ) -> ResetPasswordCompleteResponse:
+        pkce = PKCE(verifier, base_url=self.auth_ext_url)
+        async with httpx.AsyncClient() as http_client:
+            url = urljoin(self.auth_ext_url, "reset-password")
+            reset_response = await http_client.post(
+                url,
+                json={
+                    "provider": "builtin::local_emailpassword",
+                    "reset_token": reset_token,
+                    "password": password,
+                },
+            )
+
+            logger.info(f"Reset response: {reset_response.text}")
+            reset_response.raise_for_status()
+            reset_json = reset_response.json()
+            match reset_json:
+                case {"error": error}:
+                    logger.error(f"Reset error: {error}")
+                    raise Exception(f"Reset error: {error}")
+                case {"code": code}:
+                    token_data = await pkce.exchange_code_for_token(code)
+                    return ResetPasswordCompleteResponse(
+                        status="complete",
+                        token_data=token_data,
+                    )
+                case _:
+                    logger.error("No code in reset response")
+                    raise Exception("No code in reset response")

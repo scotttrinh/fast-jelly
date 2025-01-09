@@ -54,7 +54,6 @@ async def get_email_password_verify_body(request: Request) -> EmailPasswordVerif
 
 
 class EmailPassword:
-
     def __init__(self, *, client: edgedb.AsyncIOClient, verify_url: str):
         self.client = client
         self.verify_url = verify_url
