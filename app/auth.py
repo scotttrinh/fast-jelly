@@ -10,8 +10,7 @@ from typing import Annotated
 from .edgedb_client import client
 from .auth_fastapi import (
     make_email_password,
-    EmailPasswordResponse,
-    EmailVerificationResponse,
+    email_password as core_email_password,
 )
 from .queries import create_user_async_edgeql as create_user_qry
 
@@ -29,7 +28,7 @@ email_password = make_email_password(
 async def register(
     email: Annotated[str, Form()],
     sign_up_response: Annotated[
-        EmailPasswordResponse, Depends(email_password.handle_sign_up)
+        core_email_password.SignUpResponse, Depends(email_password.handle_sign_up)
     ],
 ):
     if sign_up_response.identity_id is not None:
@@ -54,7 +53,7 @@ async def register(
 )
 async def authenticate(
     sign_in_response: Annotated[
-        EmailPasswordResponse, Depends(email_password.handle_sign_in)
+        core_email_password.SignInResponse, Depends(email_password.handle_sign_in)
     ],
 ):
     return (
@@ -71,7 +70,7 @@ async def authenticate(
 )
 async def verify(
     verify_response: Annotated[
-        EmailVerificationResponse, Depends(email_password.handle_verify_email)
+        core_email_password.EmailVerificationResponse, Depends(email_password.handle_verify_email)
     ],
 ):
     if verify_response.status == "complete":

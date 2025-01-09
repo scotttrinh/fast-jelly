@@ -1,99 +1,69 @@
 from __future__ import annotations
 
-import secrets
-import hashlib
-import base64
 import httpx
 import uuid
-import edgedb
 import logging
-import sys
+import edgedb
 
 from urllib.parse import urljoin
 from typing import Literal, Union, Optional
 from pydantic import BaseModel
 
+from .pkce import PKCE, generate_pkce
+from .token_data import TokenData
 
 logger = logging.getLogger("gel_auth")
-logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-
-stream_handler = logging.StreamHandler(sys.stdout)
-stream_handler.setFormatter(formatter)
-
-logger.addHandler(stream_handler)
 
 
-class PKCE:
-    def __init__(self, verifier: str, *, base_url: str):
-        self.base_url = base_url
-        self.verifier = verifier
-        self.challenge = (
-            base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
-            .rstrip(b"=")
-            .decode()
-        )
-
-    async def exchange_code_for_token(self, code: str) -> TokenData:
-        async with httpx.AsyncClient() as http_client:
-            url = urljoin(self.base_url, "token")
-            logger.info(f"Exchanging code for token: {url}")
-            token_response = await http_client.get(
-                url,
-                params={
-                    "code": code,
-                    "verifier": self.verifier,
-                },
-            )
-
-            logger.info(f"Token response: {token_response.text}")
-            token_response.raise_for_status()
-            token_json = token_response.json()
-            return TokenData(
-                auth_token=token_json["auth_token"],
-                identity_id=token_json["identity_id"],
-                provider_token=token_json["provider_token"],
-                provider_refresh_token=token_json["provider_refresh_token"],
-            )
-
-
-def generate_pkce(base_url: str) -> PKCE:
-    verifier = secrets.token_urlsafe(32)
-    return PKCE(verifier, base_url=base_url)
-
-
-class TokenData(BaseModel):
-    auth_token: str
-    identity_id: uuid.UUID
-    provider_token: str | None
-    provider_refresh_token: str | None
-
-
-class EmailPasswordBody(BaseModel):
+class SignUpBody(BaseModel):
     email: str
     password: str
 
 
-class EmailPasswordCompleteResponse(BaseModel):
+class SignUpCompleteResponse(BaseModel):
     status: Literal["complete"]
     verifier: str
     token_data: TokenData
     identity_id: uuid.UUID
 
 
-class EmailPasswordVerificationRequiredResponse(BaseModel):
+class SignUpVerificationRequiredResponse(BaseModel):
     status: Literal["verification_required"]
     verifier: str
     token_data: None
     identity_id: uuid.UUID | None
 
 
-EmailPasswordResponse = Union[
-    EmailPasswordCompleteResponse, EmailPasswordVerificationRequiredResponse
+SignUpResponse = Union[
+    SignUpCompleteResponse, SignUpVerificationRequiredResponse
 ]
 
 
-class EmailPasswordVerifyBody(BaseModel):
+class SignInBody(BaseModel):
+    email: str
+    password: str
+
+
+class SignInCompleteResponse(BaseModel):
+    status: Literal["complete"]
+    verifier: str
+    token_data: TokenData
+    identity_id: uuid.UUID
+
+
+class SignInVerificationRequiredResponse(BaseModel):
+    status: Literal["verification_required"]
+    verifier: str
+    token_data: None
+    identity_id: uuid.UUID | None
+
+
+SignInResponse = Union[
+    SignInCompleteResponse, SignInVerificationRequiredResponse
+]
+
+
+class VerifyBody(BaseModel):
     verification_token: str
     verifier: str
 
@@ -123,16 +93,11 @@ class ResetPasswordCompleteResponse(BaseModel):
     token_data: TokenData
 
 
-class EmailPasswordSignInBody(BaseModel):
-    email: str
-    password: str
-
-
 class LocalIdentity(BaseModel):
     id: str
 
 
-async def make_email_password(
+async def make(
     *,
     client: edgedb.AsyncIOClient,
     verify_url: str,
@@ -158,7 +123,7 @@ class EmailPassword:
         self.verify_url = verify_url
         pass
 
-    async def sign_up(self, email: str, password: str) -> EmailPasswordResponse:
+    async def sign_up(self, email: str, password: str) -> SignUpResponse:
         pkce = generate_pkce(self.auth_ext_url)
         async with httpx.AsyncClient() as http_client:
             url = urljoin(self.auth_ext_url, "register")
@@ -187,7 +152,7 @@ class EmailPassword:
 
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     logger.info(f"Token data: {token_data}")
-                    return EmailPasswordCompleteResponse(
+                    return SignUpCompleteResponse(
                         status="complete",
                         verifier=pkce.verifier,
                         token_data=token_data,
@@ -198,14 +163,14 @@ class EmailPassword:
                         "No code in register response, assuming verification required"
                     )
                     logger.info(f"PKCE verifier: {pkce.verifier}")
-                    return EmailPasswordVerificationRequiredResponse(
+                    return SignUpVerificationRequiredResponse(
                         status="verification_required",
                         verifier=pkce.verifier,
                         token_data=None,
                         identity_id=register_json.get("identity_id"),
                     )
 
-    async def sign_in(self, email: str, password: str) -> EmailPasswordResponse:
+    async def sign_in(self, email: str, password: str) -> SignInResponse:
         pkce = generate_pkce(self.auth_ext_url)
         async with httpx.AsyncClient() as http_client:
             url = urljoin(self.auth_ext_url, "authenticate")
@@ -233,7 +198,7 @@ class EmailPassword:
 
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     logger.info(f"Token data: {token_data}")
-                    return EmailPasswordCompleteResponse(
+                    return SignInCompleteResponse(
                         status="complete",
                         verifier=pkce.verifier,
                         token_data=token_data,
@@ -244,7 +209,7 @@ class EmailPassword:
                         "No code in sign in response, assuming verification required"
                     )
                     logger.info(f"PKCE verifier: {pkce.verifier}")
-                    return EmailPasswordVerificationRequiredResponse(
+                    return SignInVerificationRequiredResponse(
                         status="verification_required",
                         verifier=pkce.verifier,
                         token_data=None,

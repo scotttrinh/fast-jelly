@@ -5,52 +5,7 @@ import datetime
 from typing import Optional, Annotated
 from fastapi import Response, Request, Query, Cookie
 
-from .auth_core import (
-    make_email_password as make_core_email_password,
-    EmailPasswordBody,
-    EmailPasswordResponse,
-    EmailPasswordVerifyBody,
-    EmailVerificationResponse,
-)
-
-
-async def get_email_password_body(request: Request) -> EmailPasswordBody:
-    content_type = request.headers.get("content-type")
-    match content_type:
-        case "application/x-www-form-urlencoded" | "multipart/form-data":
-            form = await request.form()
-            body = EmailPasswordBody(
-                email=str(form.get("email")), password=str(form.get("password"))
-            )
-        case "application/json":
-            json_body = await request.json()
-            body = EmailPasswordBody(
-                email=json_body.get("email", ""),
-                password=json_body.get("password", ""),
-            )
-        case _:
-            raise ValueError("Unsupported content type")
-    return body
-
-
-async def get_email_password_verify_body(request: Request) -> EmailPasswordVerifyBody:
-    content_type = request.headers.get("content-type")
-    match content_type:
-        case "application/x-www-form-urlencoded" | "multipart/form-data":
-            form = await request.form()
-            body = EmailPasswordVerifyBody(
-                verification_token=str(form.get("verification_token")),
-                verifier=str(form.get("verifier")),
-            )
-        case "application/json":
-            json_body = await request.json()
-            body = EmailPasswordVerifyBody(
-                verification_token=json_body.get("verification_token", ""),
-                verifier=json_body.get("verifier", ""),
-            )
-        case _:
-            raise ValueError("Unsupported content type")
-    return body
+import auth_core.email_password as email_password
 
 
 class EmailPassword:
@@ -62,11 +17,11 @@ class EmailPassword:
         self,
         request: Request,
         response: Response,
-    ) -> EmailPasswordResponse:
-        email_password_client = await make_core_email_password(
+    ) -> email_password.SignUpResponse:
+        email_password_client = await email_password.make(
             client=self.client, verify_url=self.verify_url
         )
-        body = await get_email_password_body(request)
+        body = await self.get_sign_up_body(request)
         sign_up_response = await email_password_client.sign_up(
             body.email, body.password
         )
@@ -87,11 +42,11 @@ class EmailPassword:
         self,
         request: Request,
         response: Response,
-    ) -> EmailPasswordResponse:
-        email_password_client = await make_core_email_password(
+    ) -> email_password.SignInResponse:
+        email_password_client = await email_password.make(
             client=self.client, verify_url=self.verify_url
         )
-        body = await get_email_password_body(request)
+        body = await self.get_sign_in_body(request)
         sign_in_response = await email_password_client.sign_in(
             body.email, body.password
         )
@@ -106,11 +61,47 @@ class EmailPassword:
         verification_token: Annotated[str, Query()],
         verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")],
         response: Response,
-    ) -> EmailVerificationResponse:
-        email_password_client = await make_core_email_password(
+    ) -> email_password.EmailVerificationResponse:
+        email_password_client = await email_password.make(
             client=self.client, verify_url=self.verify_url
         )
         return await email_password_client.verify_email(verification_token, verifier)
+
+    async def get_sign_up_body(self, request: Request) -> email_password.SignUpBody:
+        content_type = request.headers.get("content-type")
+        match content_type:
+            case "application/x-www-form-urlencoded" | "multipart/form-data":
+                form = await request.form()
+                body = email_password.SignUpBody(
+                    email=str(form.get("email")), password=str(form.get("password"))
+                )
+            case "application/json":
+                json_body = await request.json()
+                body = email_password.SignUpBody(
+                    email=json_body.get("email", ""),
+                    password=json_body.get("password", ""),
+                )
+            case _:
+                raise ValueError("Unsupported content type")
+        return body
+
+    async def get_sign_in_body(self, request: Request) -> email_password.SignInBody:
+        content_type = request.headers.get("content-type")
+        match content_type:
+            case "application/x-www-form-urlencoded" | "multipart/form-data":
+                form = await request.form()
+                body = email_password.SignInBody(
+                    email=str(form.get("email")), password=str(form.get("password"))
+                )
+            case "application/json":
+                json_body = await request.json()
+                body = email_password.SignInBody(
+                    email=json_body.get("email", ""),
+                    password=json_body.get("password", ""),
+                )
+            case _:
+                raise ValueError("Unsupported content type")
+        return body
 
 
 def make_email_password(
