@@ -4,6 +4,7 @@ import httpx
 import uuid
 import logging
 import edgedb
+import json
 
 from urllib.parse import urljoin
 from typing import Union, Optional
@@ -82,7 +83,7 @@ class EmailVerificationCompleteResponse(BaseModel):
 
 
 class EmailVerificationMissingProofResponse(BaseModel):
-    token_data: None
+    pass
 
 
 class EmailVerificationFailedResponse(BaseServerFailedResponse):
@@ -176,7 +177,7 @@ class EmailPassword:
         pkce = generate_pkce(self.auth_ext_url)
         async with httpx.AsyncClient() as http_client:
             url = urljoin(self.auth_ext_url, "register")
-            logger.info(f"Registering user {email}: {url}")
+            logger.info(f"Signing up user {email}: {url}")
             register_response = await http_client.post(
                 url,
                 json={
@@ -202,7 +203,11 @@ class EmailPassword:
             match register_json:
                 case {"error": error}:
                     logger.error(f"Register error: {error}")
-                    raise Exception(f"Register error: {error}")
+                    return SignUpFailedResponse(
+                        verifier=pkce.verifier,
+                        status_code=register_response.status_code,
+                        message=error,
+                    )
                 case {"code": code}:
                     logger.info(f"Exchanging code for token: {code}")
                     token_data = await pkce.exchange_code_for_token(code)
@@ -254,7 +259,11 @@ class EmailPassword:
             match sign_in_json:
                 case {"error": error}:
                     logger.error(f"Sign in error: {error}")
-                    raise Exception(f"Sign in error: {error}")
+                    return SignInFailedResponse(
+                        verifier=pkce.verifier,
+                        status_code=sign_in_response.status_code,
+                        message=error,
+                    )
                 case {"code": code}:
                     logger.info(f"Exchanging code for token: {code}")
                     token_data = await pkce.exchange_code_for_token(code)
@@ -302,10 +311,13 @@ class EmailPassword:
             match verify_json:
                 case {"error": error}:
                     logger.error(f"Verify error: {error}")
-                    raise Exception(f"Verify error: {error}")
+                    return EmailVerificationFailedResponse(
+                        status_code=verify_response.status_code,
+                        message=error,
+                    )
                 case {"code": code}:
                     if verifier is None:
-                        return EmailVerificationMissingProofResponse(token_data=None)
+                        return EmailVerificationMissingProofResponse()
 
                     pkce = PKCE(verifier, base_url=self.auth_ext_url)
                     logger.info(f"Exchanging code for token: {code}")
@@ -317,8 +329,10 @@ class EmailPassword:
                         token_data=token_data,
                     )
                 case _:
-                    logger.error("No code in verify response")
-                    raise Exception("No code in verify response")
+                    logger.error(
+                        f"No code in verify response: {json.dumps(verify_json)}"
+                    )
+                    return EmailVerificationMissingProofResponse()
 
     async def send_password_reset_email(
         self, email: str
@@ -350,7 +364,11 @@ class EmailPassword:
             match reset_json:
                 case {"error": error}:
                     logger.error(f"Reset error: {error}")
-                    raise Exception(f"Reset error: {error}")
+                    return SendPasswordResetEmailFailedResponse(
+                        verifier=pkce.verifier,
+                        status_code=reset_response.status_code,
+                        message=error,
+                    )
                 case _:
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     logger.info(f"Reset response: {reset_json}")
@@ -385,7 +403,10 @@ class EmailPassword:
             match reset_json:
                 case {"error": error}:
                     logger.error(f"Reset error: {error}")
-                    raise Exception(f"Reset error: {error}")
+                    return PasswordResetFailedResponse(
+                        status_code=reset_response.status_code,
+                        message=error,
+                    )
                 case {"code": code}:
                     if verifier is None:
                         return PasswordResetMissingProofResponse()
@@ -397,5 +418,5 @@ class EmailPassword:
                         token_data=token_data,
                     )
                 case _:
-                    logger.error("No code in reset response")
-                    raise Exception("No code in reset response")
+                    logger.error(f"No code in reset response: {json.dumps(reset_json)}")
+                    return PasswordResetMissingProofResponse()
