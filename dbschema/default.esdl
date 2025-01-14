@@ -24,6 +24,17 @@ module default {
         multi identities: ext::auth::Identity {
             constraint exclusive;
         };
+
+        multi events := .<host[is Event];
+
+        access policy anyone_can_create
+            allow insert;
+
+        access policy self_has_full_access
+            allow all
+            using (
+                __subject__ ?= global current_user
+            );
     }
 
     type Event extending Auditable {
@@ -32,6 +43,15 @@ module default {
         };
         address: str;
         schedule: datetime;
-        host: User;
+        required host: User;
+
+        access policy anyone_can_create
+            allow insert;
+
+        access policy host_has_full_access
+            allow all
+            using (
+                .host ?= global current_user
+            );
     }
 }
