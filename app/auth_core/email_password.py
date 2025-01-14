@@ -106,7 +106,7 @@ class SendPasswordResetEmailCompleteResponse(BaseModel):
 
 
 class SendPasswordResetEmailFailedResponse(BaseServerFailedResponse):
-    pass
+    verifier: str
 
 
 SendPasswordResetEmailResponse = Union[
@@ -338,6 +338,7 @@ class EmailPassword:
             except httpx.HTTPStatusError as e:
                 logger.error(f"Reset error: {e}")
                 return SendPasswordResetEmailFailedResponse(
+                    verifier=pkce.verifier,
                     status_code=e.response.status_code,
                     message=e.response.text,
                 )

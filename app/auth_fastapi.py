@@ -82,15 +82,18 @@ class EmailPassword:
         send_password_reset_body = email_password.SendPasswordResetBody.model_validate(
             await _get_request_body(request)
         )
-        return await email_password_client.send_password_reset_email(
+        send_password_reset_response = await email_password_client.send_password_reset_email(
             send_password_reset_body.email, send_password_reset_body.reset_url
         )
+
+        _set_verifier_cookie(send_password_reset_response.verifier, response)
+        return send_password_reset_response
 
     async def handle_reset_password(
         self,
         request: Request,
         response: Response,
-        verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")],
+        verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")] = None,
     ) -> email_password.PasswordResetResponse:
         email_password_client = await email_password.make(
             client=self.client, verify_url=self.verify_url

@@ -244,6 +244,61 @@ def ForgotPasswordForm(_: Any, context: Context) -> Component:
     )
 
 
+@component
+def ResetPasswordPage(_: Any, context: Context) -> Component:
+    request: Request = context[Request]
+    reset_token = request.query_params.get("reset_token", "")
+    
+    return (
+        html.DOCTYPE.html,
+        html.html(
+            head("Reset your password"),
+            html.body(
+                # Page content: Reset password page
+                html.div(
+                    Heading("Reset your password"),
+                    html.form(
+                        html.div(
+                            html.label(
+                                "New password",
+                                for_="password",
+                                class_="block text-sm font-medium text-slate-300 mb-1 pl-2",
+                            ),
+                            html.input_(
+                                type="password",
+                                name="password",
+                                id="password",
+                                placeholder="Enter your password",
+                                class_="w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            ),
+                            class_="mb-4",
+                        ),
+                        html.input_(
+                            type="hidden",
+                            name="reset_token",
+                            value=reset_token,
+                        ),
+                        html.div(
+                            html.button(
+                                "Reset password",
+                                type="submit",
+                                class_="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700",
+                            ),
+                            class_="flex flex-col gap-2",
+                        ),
+                        action="/auth/reset-password",
+                        method="post",
+                        class_="bg-slate-800 p-6 rounded-lg shadow-lg w-80",
+                    ),
+                    class_="flex flex-col items-center justify-center gap-4",
+                ),
+                class_="h-screen w-screen flex items-center justify-center bg-slate-900 text-white",
+            ),
+        ),
+    )
+
+
+
 @router.get("/")
 async def index(render: DependsRenderFunc):
     return await render(IndexPage(None))
@@ -257,3 +312,8 @@ async def signin(render: DependsRenderFunc):
 @router.get("/ui/forgot-password")
 async def forgot_password_form(render: DependsRenderFunc):
     return await render(ForgotPasswordForm(None))
+
+
+@router.get("/ui/reset-password")
+async def reset_password_page(render: DependsRenderFunc):
+    return await render(ResetPasswordPage(None))
