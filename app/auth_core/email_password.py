@@ -99,7 +99,6 @@ EmailVerificationResponse = Union[
 
 class SendPasswordResetBody(BaseModel):
     email: str
-    reset_url: str
 
 
 class SendPasswordResetEmailCompleteResponse(BaseModel):
