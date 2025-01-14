@@ -10,7 +10,6 @@ from fastapi.responses import HTMLResponse
 from ..users import User
 from ..edgedb_client import client
 from ..queries import get_current_user_async_edgeql as get_current_user_qry
-from ..config import BASE_URL
 
 from .components import Heading, head
 
@@ -214,11 +213,6 @@ def ForgotPasswordForm(_: Any, context: Context) -> Component:
                 class_="w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500",
             ),
             class_="mb-4",
-        ),
-        html.input_(
-            type="hidden",
-            name="reset_url",
-            value=f"{BASE_URL}/ui/reset-password",
         ),
         html.div(
             html.button(

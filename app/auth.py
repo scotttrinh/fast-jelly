@@ -18,7 +18,11 @@ from .queries import create_user_async_edgeql as create_user_qry
 
 logger = logging.getLogger("fast_jelly")
 router = APIRouter()
-email_password = make_email_password(client, verify_url=f"{BASE_URL}/auth/verify")
+email_password = make_email_password(
+    client,
+    verify_url=f"{BASE_URL}/auth/verify",
+    reset_url=f"{BASE_URL}/auth/reset-password",
+)
 
 
 @router.post(

@@ -9,18 +9,28 @@ from .auth_core import email_password
 
 
 class EmailPassword:
-    def __init__(self, *, client: edgedb.AsyncIOClient, verify_url: str):
+    def __init__(
+        self,
+        *,
+        client: edgedb.AsyncIOClient,
+        verify_url: str,
+        reset_url: str,
+    ):
         self.client = client
         self.verify_url = verify_url
+        self.reset_url = reset_url
+
+    async def make_core(self) -> email_password.EmailPassword:
+        return await email_password.make(
+            client=self.client, verify_url=self.verify_url, reset_url=self.reset_url
+        )
 
     async def handle_sign_up(
         self,
         request: Request,
         response: Response,
     ) -> email_password.SignUpResponse:
-        email_password_client = await email_password.make(
-            client=self.client, verify_url=self.verify_url
-        )
+        email_password_client = await self.make_core()
         sign_up_body = email_password.SignUpBody.model_validate(
             await _get_request_body(request)
         )
@@ -41,9 +51,7 @@ class EmailPassword:
         request: Request,
         response: Response,
     ) -> email_password.SignInResponse:
-        email_password_client = await email_password.make(
-            client=self.client, verify_url=self.verify_url
-        )
+        email_password_client = await self.make_core()
         sign_in_body = email_password.SignInBody.model_validate(
             await _get_request_body(request)
         )
@@ -66,9 +74,7 @@ class EmailPassword:
         verification_token: Annotated[str, Query()],
         verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")] = None,
     ) -> email_password.EmailVerificationResponse:
-        email_password_client = await email_password.make(
-            client=self.client, verify_url=self.verify_url
-        )
+        email_password_client = await self.make_core()
         return await email_password_client.verify_email(verification_token, verifier)
 
     async def handle_send_password_reset(
@@ -76,15 +82,13 @@ class EmailPassword:
         request: Request,
         response: Response,
     ) -> email_password.SendPasswordResetEmailResponse:
-        email_password_client = await email_password.make(
-            client=self.client, verify_url=self.verify_url
-        )
+        email_password_client = await self.make_core()
         send_password_reset_body = email_password.SendPasswordResetBody.model_validate(
             await _get_request_body(request)
         )
         send_password_reset_response = (
             await email_password_client.send_password_reset_email(
-                send_password_reset_body.email, send_password_reset_body.reset_url
+                send_password_reset_body.email
             )
         )
 
@@ -97,9 +101,7 @@ class EmailPassword:
         response: Response,
         verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")] = None,
     ) -> email_password.PasswordResetResponse:
-        email_password_client = await email_password.make(
-            client=self.client, verify_url=self.verify_url
-        )
+        email_password_client = await self.make_core()
         password_reset_body = email_password.PasswordResetBody.model_validate(
             await _get_request_body(request)
         )
@@ -111,9 +113,9 @@ class EmailPassword:
 
 
 def make_email_password(
-    client: edgedb.AsyncIOClient, *, verify_url: str
+    client: edgedb.AsyncIOClient, *, verify_url: str, reset_url: str
 ) -> EmailPassword:
-    return EmailPassword(client=client, verify_url=verify_url)
+    return EmailPassword(client=client, verify_url=verify_url, reset_url=reset_url)
 
 
 def _get_unchecked_exp(token: str) -> Optional[datetime.datetime]:

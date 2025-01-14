@@ -146,6 +146,7 @@ async def make(
     *,
     client: edgedb.AsyncIOClient,
     verify_url: str,
+    reset_url: str,
 ) -> EmailPassword:
     await client.ensure_connected()
     pool = client._impl
@@ -154,7 +155,9 @@ async def make(
     proto = "http" if params.tls_security == "insecure" else "https"
     branch = params.branch
     auth_ext_url = f"{proto}://{host}:{port}/branch/{branch}/ext/auth/"
-    return EmailPassword(auth_ext_url=auth_ext_url, verify_url=verify_url)
+    return EmailPassword(
+        auth_ext_url=auth_ext_url, verify_url=verify_url, reset_url=reset_url
+    )
 
 
 class EmailPassword:
@@ -163,9 +166,11 @@ class EmailPassword:
         *,
         verify_url: str,
         auth_ext_url: str,
+        reset_url: str,
     ):
         self.auth_ext_url = auth_ext_url
         self.verify_url = verify_url
+        self.reset_url = reset_url
         pass
 
     async def sign_up(self, email: str, password: str) -> SignUpResponse:
@@ -317,7 +322,7 @@ class EmailPassword:
                     raise Exception("No code in verify response")
 
     async def send_password_reset_email(
-        self, email: str, reset_url: str
+        self, email: str
     ) -> SendPasswordResetEmailResponse:
         pkce = generate_pkce(self.auth_ext_url)
         async with httpx.AsyncClient() as http_client:
@@ -328,7 +333,7 @@ class EmailPassword:
                     "email": email,
                     "provider": "builtin::local_emailpassword",
                     "challenge": pkce.challenge,
-                    "reset_url": reset_url,
+                    "reset_url": self.reset_url,
                 },
             )
 
