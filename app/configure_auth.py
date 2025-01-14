@@ -4,6 +4,7 @@ import secrets
 
 from edgedb import create_async_client
 
+
 async def main():
     client = create_async_client()
 
@@ -46,6 +47,6 @@ cfg::current_email_provider_name := "mailpit";
         """
     )
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-  

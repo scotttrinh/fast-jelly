@@ -88,9 +88,7 @@ def SignInPage(_: Any, context: Context) -> Component:
     incomplete_message = request.query_params.get("incomplete", "")
     match incomplete_message:
         case "verification_required":
-            incomplete_message = (
-                "Please verify your email address before signing in."
-            )
+            incomplete_message = "Please verify your email address before signing in."
         case "verify":
             incomplete_message = (
                 "Successfully verified email! Please sign in to continue."
@@ -248,7 +246,7 @@ def ForgotPasswordForm(_: Any, context: Context) -> Component:
 def ResetPasswordPage(_: Any, context: Context) -> Component:
     request: Request = context[Request]
     reset_token = request.query_params.get("reset_token", "")
-    
+
     return (
         html.DOCTYPE.html,
         html.html(
@@ -296,7 +294,6 @@ def ResetPasswordPage(_: Any, context: Context) -> Component:
             ),
         ),
     )
-
 
 
 @router.get("/")

@@ -6,7 +6,7 @@ import logging
 import edgedb
 
 from urllib.parse import urljoin
-from typing import Literal, Union, Optional
+from typing import Union, Optional
 from pydantic import BaseModel
 
 from .pkce import PKCE, generate_pkce
