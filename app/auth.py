@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from http import HTTPStatus
 from fastapi import APIRouter, Depends, Form
 from fastapi.responses import RedirectResponse
 from typing import Annotated
 
+from .config import BASE_URL
 from .edgedb_client import client
 from .auth_fastapi import (
     make_email_password,
@@ -14,9 +16,10 @@ from .auth_fastapi import (
 )
 from .queries import create_user_async_edgeql as create_user_qry
 
+logger = logging.getLogger("fast_jelly")
 router = APIRouter()
 email_password = make_email_password(
-    client, verify_url="http://localhost:5001/auth/verify"
+    client, verify_url=f"{BASE_URL}/auth/verify"
 )
 
 
@@ -31,6 +34,7 @@ async def register(
         core_email_password.SignUpResponse, Depends(email_password.handle_sign_up)
     ],
 ):
+    logger.info(f"sign_up_response: {sign_up_response}")
     if sign_up_response.identity_id is not None:
         user = await create_user_qry.create_user(
             client,
@@ -39,11 +43,13 @@ async def register(
         )
         print(f"Created user: {json.dumps(user, default=str)}")
 
-    return (
-        "/"
-        if sign_up_response.status == "complete"
-        else "/signin?error=verification_required"
-    )
+    match sign_up_response:
+        case core_email_password.SignUpCompleteResponse():
+            return "/"
+        case core_email_password.SignUpVerificationRequiredResponse():
+            return "/signin?error=verification_required"
+        case _:
+            raise Exception("Invalid sign up response")
 
 
 @router.post(
@@ -56,11 +62,13 @@ async def authenticate(
         core_email_password.SignInResponse, Depends(email_password.handle_sign_in)
     ],
 ):
-    return (
-        "/"
-        if sign_in_response.status == "complete"
-        else "/signin?error=verification_required"
-    )
+    match sign_in_response:
+        case core_email_password.SignInCompleteResponse():
+            return "/"
+        case core_email_password.SignInVerificationRequiredResponse():
+            return "/signin?error=verification_required"
+        case _:
+            raise Exception("Invalid sign in response")
 
 
 @router.get(
@@ -70,17 +78,50 @@ async def authenticate(
 )
 async def verify(
     verify_response: Annotated[
-        core_email_password.EmailVerificationResponse, Depends(email_password.handle_verify_email)
+        core_email_password.EmailVerificationResponse,
+        Depends(email_password.handle_verify_email),
     ],
 ):
-    if verify_response.status == "complete":
-        user = await create_user_qry.create_user(
-            client,
-            name="",
-            identity_id=verify_response.token_data.identity_id,
-        )
-        print(f"Created user: {json.dumps(user, default=str)}")
+    match verify_response:
+        case core_email_password.EmailVerificationCompleteResponse():
+            return "/"
+        case core_email_password.EmailVerificationMissingProofResponse():
+            return "/signin?incomplete=verify"
+        case _:
+            raise Exception("Invalid verify email response")
 
-        return "/"
 
-    return "/signin?error=missing_proof"
+@router.post(
+    "/auth/send-password-reset",
+    response_class=RedirectResponse,
+    status_code=HTTPStatus.SEE_OTHER,
+)
+async def send_password_reset(
+    send_password_reset_response: Annotated[
+        core_email_password.SendPasswordResetEmailCompleteResponse,
+        Depends(email_password.handle_send_password_reset),
+    ],
+):
+    return "/signin?incomplete=password_reset_sent"
+
+
+@router.post(
+    "/auth/reset-password",
+    response_class=RedirectResponse,
+    status_code=HTTPStatus.SEE_OTHER,
+)
+async def reset_password(
+    reset_password_response: Annotated[
+        core_email_password.PasswordResetResponse,
+        Depends(email_password.handle_reset_password),
+    ],
+):
+    match reset_password_response:
+        case core_email_password.PasswordResetCompleteResponse():
+            return "/"
+        case core_email_password.PasswordResetMissingProofResponse():
+            return "/signin?incomplete=reset_password"
+        case _:
+            raise Exception("Invalid reset password response")
+
+

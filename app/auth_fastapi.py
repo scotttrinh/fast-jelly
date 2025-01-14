@@ -5,7 +5,7 @@ import datetime
 from typing import Optional, Annotated
 from fastapi import Response, Request, Query, Cookie
 
-import auth_core.email_password as email_password
+from .auth_core import email_password
 
 
 class EmailPassword:
@@ -21,21 +21,16 @@ class EmailPassword:
         email_password_client = await email_password.make(
             client=self.client, verify_url=self.verify_url
         )
-        body = await self.get_sign_up_body(request)
+        sign_up_body = email_password.SignUpBody.model_validate(
+            await _get_request_body(request)
+        )
         sign_up_response = await email_password_client.sign_up(
-            body.email, body.password
+            sign_up_body.email, sign_up_body.password
         )
-        response.set_cookie(
-            key="edgedb_verifier",
-            value=sign_up_response.verifier,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            expires=int(datetime.timedelta(days=7).total_seconds()),
-        )
+        _set_verifier_cookie(sign_up_response.verifier, response)
         if sign_up_response.status == "complete":
             auth_token = sign_up_response.token_data.auth_token
-            set_auth_cookie(auth_token, response)
+            _set_auth_cookie(auth_token, response)
         return sign_up_response
 
     async def handle_sign_in(
@@ -46,62 +41,62 @@ class EmailPassword:
         email_password_client = await email_password.make(
             client=self.client, verify_url=self.verify_url
         )
-        body = await self.get_sign_in_body(request)
-        sign_in_response = await email_password_client.sign_in(
-            body.email, body.password
+        sign_in_body = email_password.SignInBody.model_validate(
+            await _get_request_body(request)
         )
+        sign_in_response = await email_password_client.sign_in(
+            sign_in_body.email, sign_in_body.password
+        )
+        _set_verifier_cookie(sign_in_response.verifier, response)
         if sign_in_response.status == "complete":
             auth_token = sign_in_response.token_data.auth_token
-            set_auth_cookie(auth_token, response)
+            _set_auth_cookie(auth_token, response)
         return sign_in_response
 
     async def handle_verify_email(
         self,
         request: Request,
-        verification_token: Annotated[str, Query()],
-        verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")],
         response: Response,
+        verification_token: Annotated[str, Query()],
+        verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")] = None,
     ) -> email_password.EmailVerificationResponse:
         email_password_client = await email_password.make(
             client=self.client, verify_url=self.verify_url
         )
         return await email_password_client.verify_email(verification_token, verifier)
 
-    async def get_sign_up_body(self, request: Request) -> email_password.SignUpBody:
-        content_type = request.headers.get("content-type")
-        match content_type:
-            case "application/x-www-form-urlencoded" | "multipart/form-data":
-                form = await request.form()
-                body = email_password.SignUpBody(
-                    email=str(form.get("email")), password=str(form.get("password"))
-                )
-            case "application/json":
-                json_body = await request.json()
-                body = email_password.SignUpBody(
-                    email=json_body.get("email", ""),
-                    password=json_body.get("password", ""),
-                )
-            case _:
-                raise ValueError("Unsupported content type")
-        return body
+    async def handle_send_password_reset(
+        self,
+        request: Request,
+        response: Response,
+    ) -> email_password.SendPasswordResetEmailCompleteResponse:
+        email_password_client = await email_password.make(
+            client=self.client, verify_url=self.verify_url
+        )
+        send_password_reset_body = email_password.SendPasswordResetBody.model_validate(
+            await _get_request_body(request)
+        )
+        return await email_password_client.send_password_reset_email(
+            send_password_reset_body.email, send_password_reset_body.reset_url
+        )
 
-    async def get_sign_in_body(self, request: Request) -> email_password.SignInBody:
-        content_type = request.headers.get("content-type")
-        match content_type:
-            case "application/x-www-form-urlencoded" | "multipart/form-data":
-                form = await request.form()
-                body = email_password.SignInBody(
-                    email=str(form.get("email")), password=str(form.get("password"))
-                )
-            case "application/json":
-                json_body = await request.json()
-                body = email_password.SignInBody(
-                    email=json_body.get("email", ""),
-                    password=json_body.get("password", ""),
-                )
-            case _:
-                raise ValueError("Unsupported content type")
-        return body
+    async def handle_reset_password(
+        self,
+        request: Request,
+        response: Response,
+        verifier: Annotated[Optional[str], Cookie(alias="edgedb_verifier")],
+    ) -> email_password.PasswordResetResponse:
+        email_password_client = await email_password.make(
+            client=self.client, verify_url=self.verify_url
+        )
+        password_reset_body = email_password.PasswordResetBody.model_validate(
+            await _get_request_body(request)
+        )
+        return await email_password_client.reset_password(
+            reset_token=password_reset_body.reset_token,
+            verifier=verifier,
+            password=password_reset_body.password,
+        )
 
 
 def make_email_password(
@@ -110,15 +105,15 @@ def make_email_password(
     return EmailPassword(client=client, verify_url=verify_url)
 
 
-def get_unchecked_exp(token: str) -> Optional[datetime.datetime]:
+def _get_unchecked_exp(token: str) -> Optional[datetime.datetime]:
     jwt_payload = jwt.decode(token, options={"verify_signature": False})
     if "exp" not in jwt_payload:
         return None
     return datetime.datetime.fromtimestamp(jwt_payload["exp"], tz=datetime.timezone.utc)
 
 
-def set_auth_cookie(token: str, response: Response) -> None:
-    exp = get_unchecked_exp(token)
+def _set_auth_cookie(token: str, response: Response) -> None:
+    exp = _get_unchecked_exp(token)
     response.set_cookie(
         key="edgedb_auth_token",
         value=token,
@@ -127,3 +122,25 @@ def set_auth_cookie(token: str, response: Response) -> None:
         samesite="lax",
         expires=exp,
     )
+
+
+def _set_verifier_cookie(verifier: str, response: Response) -> None:
+    response.set_cookie(
+        key="edgedb_verifier",
+        value=verifier,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        expires=int(datetime.timedelta(days=7).total_seconds()),
+    )
+
+
+async def _get_request_body(request: Request) -> dict:
+    content_type = request.headers.get("content-type")
+    match content_type:
+        case "application/x-www-form-urlencoded" | "multipart/form-data":
+            return dict(await request.form())
+        case "application/json":
+            return await request.json()
+        case _:
+            raise ValueError("Unsupported content type")

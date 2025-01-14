@@ -9,7 +9,12 @@
     pkgs = import nixpkgs { inherit system; };
   in {
     devShells.default = pkgs.mkShell {
-      packages = [ pkgs.python312 pkgs.poetry pkgs.ruff ];
+      packages = [ pkgs.python312 pkgs.poetry pkgs.ruff pkgs.mailpit ];
+
+      shellHook = ''
+        export APP_PORT=8000
+        export MP_SMTP_AUTH=smtpuser:smtppassword
+      '';
     };
   });
 }

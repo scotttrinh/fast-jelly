@@ -83,14 +83,33 @@ EmailVerificationResponse = Union[
 ]
 
 
-class SendResetPasswordEmailCompleteResponse(BaseModel):
+class SendPasswordResetBody(BaseModel):
+    email: str
+    reset_url: str
+
+
+class SendPasswordResetEmailCompleteResponse(BaseModel):
     status: Literal["complete"]
     verifier: str
 
 
-class ResetPasswordCompleteResponse(BaseModel):
+class PasswordResetBody(BaseModel):
+    reset_token: str
+    password: str
+
+
+class PasswordResetCompleteResponse(BaseModel):
     status: Literal["complete"]
     token_data: TokenData
+
+
+class PasswordResetMissingProofResponse(BaseModel):
+    status: Literal["missing_proof"]
+
+
+PasswordResetResponse = Union[
+    PasswordResetCompleteResponse, PasswordResetMissingProofResponse
+]
 
 
 class LocalIdentity(BaseModel):
@@ -255,9 +274,9 @@ class EmailPassword:
                     logger.error("No code in verify response")
                     raise Exception("No code in verify response")
 
-    async def send_reset_password_email(
+    async def send_password_reset_email(
         self, email: str, reset_url: str
-    ) -> SendResetPasswordEmailCompleteResponse:
+    ) -> SendPasswordResetEmailCompleteResponse:
         pkce = generate_pkce(self.auth_ext_url)
         async with httpx.AsyncClient() as http_client:
             url = urljoin(self.auth_ext_url, "send-reset-email")
@@ -281,15 +300,14 @@ class EmailPassword:
                 case _:
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     logger.info(f"Reset response: {reset_json}")
-                    return SendResetPasswordEmailCompleteResponse(
+                    return SendPasswordResetEmailCompleteResponse(
                         status="complete",
                         verifier=pkce.verifier,
                     )
 
     async def reset_password(
-        self, reset_token: str, verifier: str, password: str
-    ) -> ResetPasswordCompleteResponse:
-        pkce = PKCE(verifier, base_url=self.auth_ext_url)
+        self, reset_token: str, verifier: Optional[str], password: str
+    ) -> PasswordResetResponse:
         async with httpx.AsyncClient() as http_client:
             url = urljoin(self.auth_ext_url, "reset-password")
             reset_response = await http_client.post(
@@ -309,8 +327,15 @@ class EmailPassword:
                     logger.error(f"Reset error: {error}")
                     raise Exception(f"Reset error: {error}")
                 case {"code": code}:
+                    if verifier is None:
+                        return PasswordResetMissingProofResponse(
+                            status="missing_proof"
+                        )
+
+                    pkce = PKCE(verifier, base_url=self.auth_ext_url)
+                    logger.info(f"Exchanging code for token: {code}")
                     token_data = await pkce.exchange_code_for_token(code)
-                    return ResetPasswordCompleteResponse(
+                    return PasswordResetCompleteResponse(
                         status="complete",
                         token_data=token_data,
                     )
