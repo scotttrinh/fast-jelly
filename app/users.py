@@ -18,8 +18,8 @@ from .queries import (
     update_user_async_edgeql as update_user_qry,
     delete_user_async_edgeql as delete_user_qry,
 )
-from .edgedb_client import client
 
+from .auth_fastapi import SessionDep
 
 router = APIRouter()
 
@@ -40,8 +40,10 @@ type UserResponse = List[User] | User
 
 @router.get("/users")
 async def get_users(
+    session: SessionDep,
     name: str = Query(default=None, max_length=50),
 ) -> UserResponse:
+    client = session.client
     if not name:
         users = await get_users_qry.get_users(client)
         return [
@@ -59,7 +61,8 @@ async def get_users(
 
 
 @router.post("/users", status_code=HTTPStatus.CREATED)
-async def post_user(user: RequestData) -> User:
+async def post_user(user: RequestData, session: SessionDep) -> User:
+    client = session.client
     try:
         created_user = await create_user_qry.create_user(client, name=user.name)
     except edgedb.errors.ConstraintViolationError:
@@ -76,7 +79,8 @@ async def post_user(user: RequestData) -> User:
 
 
 @router.put("/users")
-async def put_user(user: RequestData, current_name: str) -> User:
+async def put_user(user: RequestData, current_name: str, session: SessionDep) -> User:
+    client = session.client
     try:
         updated_user = await update_user_qry.update_user(
             client,
@@ -103,7 +107,8 @@ async def put_user(user: RequestData, current_name: str) -> User:
 
 
 @router.delete("/users", status_code=HTTPStatus.NO_CONTENT)
-async def delete_user(name: str):
+async def delete_user(name: str, session: SessionDep):
+    client = session.client
     try:
         deleted_user = await delete_user_qry.delete_user(client, name=name)
     except edgedb.errors.ConstraintViolationError:
