@@ -9,7 +9,7 @@ from urllib.parse import urljoin
 from .token_data import TokenData
 
 
-logger = logging.getLogger("gel_auth")
+logger = logging.getLogger("gel_auth_core")
 
 
 class PKCE:

@@ -19,7 +19,7 @@ from .queries import (
     delete_user_async_edgeql as delete_user_qry,
 )
 
-from .auth_fastapi import SessionDep
+from auth_fastapi import SessionDep
 
 router = APIRouter()
 

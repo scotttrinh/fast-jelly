@@ -5,7 +5,9 @@ description = ""
 authors = ["Scott Trinh <scott@scotttrinh.com>"]
 readme = "README.md"
 packages = [
-    {include = "app"}
+    {include = "app"},
+    {include = "auth_core"},
+    {include = "auth_fastapi"},
 ]
 
 [tool.poetry.dependencies]

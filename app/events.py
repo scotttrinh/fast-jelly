@@ -7,10 +7,11 @@ from http import HTTPStatus
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from auth_fastapi import SessionDep
+
 from .queries import (
     create_event_async_edgeql as create_event_qry,
 )
-from .auth_fastapi import SessionDep
 router = APIRouter()
 
 

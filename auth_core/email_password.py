@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from .pkce import PKCE, generate_pkce
 from .token_data import TokenData
 
-logger = logging.getLogger("gel_auth")
+logger = logging.getLogger("gel_auth_core")
 
 
 class SignUpBody(BaseModel):

@@ -8,12 +8,13 @@ from fastapi import APIRouter, Depends, Form
 from fastapi.responses import RedirectResponse
 from typing import Annotated
 
-from .config import BASE_URL
-from .edgedb_client import client
-from .auth_fastapi import (
+from auth_fastapi import (
     make_email_password,
     email_password as core_email_password,
 )
+
+from .config import BASE_URL
+from .edgedb_client import client
 from .queries import create_user_async_edgeql as create_user_qry
 
 logger = logging.getLogger("fast_jelly")
