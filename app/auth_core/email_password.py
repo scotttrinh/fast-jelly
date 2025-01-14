@@ -171,7 +171,6 @@ class EmailPassword:
         self.auth_ext_url = auth_ext_url
         self.verify_url = verify_url
         self.reset_url = reset_url
-        pass
 
     async def sign_up(self, email: str, password: str) -> SignUpResponse:
         pkce = generate_pkce(self.auth_ext_url)

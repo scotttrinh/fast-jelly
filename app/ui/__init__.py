@@ -81,8 +81,6 @@ def SignInPage(_: Any, context: Context) -> Component:
     match error_message:
         case "failure":
             error_message = "Sign in failed. Please try again."
-        case _:
-            pass
 
     incomplete_message = request.query_params.get("incomplete", "")
     match incomplete_message:
@@ -98,8 +96,6 @@ def SignInPage(_: Any, context: Context) -> Component:
             )
         case "password_reset_sent":
             incomplete_message = "Successfully sent password reset email! Please check your email for the link to reset your password."
-        case _:
-            pass
 
     return (
         html.DOCTYPE.html,
