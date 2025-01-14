@@ -36,7 +36,6 @@ async def register(
         core_email_password.SignUpResponse, Depends(email_password.handle_sign_up)
     ],
 ):
-    logger.info(f"sign_up_response: {sign_up_response}")
     if not isinstance(sign_up_response, core_email_password.SignUpFailedResponse):
         user = await create_user_qry.create_user(
             client,
@@ -139,5 +138,8 @@ async def reset_password(
             return "/"
         case core_email_password.PasswordResetMissingProofResponse():
             return "/signin?incomplete=reset_password"
+        case core_email_password.PasswordResetFailedResponse():
+            logger.error(f"Reset password failed: {reset_password_response}")
+            return "/signin?error=failure"
         case _:
             raise Exception("Invalid reset password response")
