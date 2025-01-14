@@ -11,7 +11,7 @@ from ..users import User
 from ..edgedb_client import client
 from ..queries import get_current_user_async_edgeql as get_current_user_qry
 
-from .components import Heading, head
+from .components import Heading, head, Input, Button, Link
 
 logger = logging.getLogger("fast_jelly")
 router = APIRouter()
@@ -123,56 +123,45 @@ def SignInPage(_: Any, context: Context) -> Component:
                     ),
                     html.form(
                         html.div(
-                            html.label(
-                                "Email",
-                                for_="email",
-                                class_="block text-sm font-medium text-slate-300 mb-1 pl-2",
-                            ),
-                            html.input_(
-                                type="email",
+                            Input(
                                 name="email",
-                                id="email",
+                                label="Email",
+                                type="email",
                                 placeholder="Enter your email",
-                                class_="w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500",
                             ),
                             class_="mb-4",
                         ),
                         html.div(
-                            html.label(
-                                "Password",
-                                for_="password",
-                                class_="block text-sm font-medium text-slate-300 mb-1 pl-2",
-                            ),
-                            html.input_(
-                                type="password",
+                            Input(
                                 name="password",
-                                id="password",
+                                label="Password",
+                                type="password",
                                 placeholder="Enter your password",
-                                class_="w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500",
                             ),
                             class_="mb-4",
                         ),
                         html.div(
-                            html.button(
+                            Button(
                                 "Sign in",
                                 type="submit",
-                                class_="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700",
+                                variant="primary",
                             ),
-                            html.button(
+                            Button(
                                 "Sign up",
                                 type="submit",
+                                variant="secondary",
                                 formaction="/auth/register",
                                 formmethod="post",
-                                class_="w-full bg-slate-600 text-white font-bold py-2 px-4 rounded hover:bg-slate-700",
                             ),
-                            html.button(
+                            Button(
                                 "Forgot password?",
                                 type="button",
+                                variant="link",
+                                class_="text-sm",
                                 hx_get="/ui/forgot-password",
                                 hx_include="#email",
                                 hx_target="closest form",
                                 hx_swap="outerHTML",
-                                class_="text-blue-400 hover:text-blue-300 underline text-sm",
                             ),
                             class_="flex flex-col gap-2",
                         ),
@@ -195,34 +184,24 @@ def ForgotPasswordForm(_: Any, context: Context) -> Component:
 
     return html.form(
         html.div(
-            html.label(
-                "Email",
-                for_="email",
-                class_="block text-sm font-medium text-slate-300 mb-1 pl-2",
-            ),
-            html.input_(
-                type="email",
+            Input(
+                label="Email",
                 name="email",
-                id="email",
+                type="email",
                 value=email,
                 placeholder="Enter your email",
-                class_="w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500",
             ),
             class_="mb-4",
         ),
         html.div(
-            html.button(
+            Button(
                 "Send Reset Link",
                 type="submit",
-                class_="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700",
+                variant="primary",
             ),
-            html.button(
+            Link(
                 "Back to Sign In",
-                type="button",
-                hx_get="/ui/signin",
-                hx_target="closest form",
-                hx_swap="outerHTML",
-                class_="w-full bg-slate-600 text-white font-bold py-2 px-4 rounded hover:bg-slate-700 mt-2",
+                href="/signin",
             ),
             class_="flex flex-col gap-2",
         ),
@@ -247,17 +226,11 @@ def ResetPasswordPage(_: Any, context: Context) -> Component:
                     Heading("Reset your password"),
                     html.form(
                         html.div(
-                            html.label(
-                                "New password",
-                                for_="password",
-                                class_="block text-sm font-medium text-slate-300 mb-1 pl-2",
-                            ),
-                            html.input_(
-                                type="password",
+                            Input(
+                                label="New password",
                                 name="password",
-                                id="password",
+                                type="password",
                                 placeholder="Enter your password",
-                                class_="w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500",
                             ),
                             class_="mb-4",
                         ),
@@ -267,10 +240,10 @@ def ResetPasswordPage(_: Any, context: Context) -> Component:
                             value=reset_token,
                         ),
                         html.div(
-                            html.button(
+                            Button(
                                 "Reset password",
                                 type="submit",
-                                class_="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700",
+                                variant="primary",
                             ),
                             class_="flex flex-col gap-2",
                         ),
