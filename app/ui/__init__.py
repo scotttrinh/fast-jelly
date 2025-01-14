@@ -80,13 +80,17 @@ def SignInPage(_: Any, context: Context) -> Component:
     request: Request = context[Request]
     error_message = request.query_params.get("error", "")
     match error_message:
-        case "verification_required":
-            error_message = "Please verify your email address before signing in."
+        case "failure":
+            error_message = "Sign in failed. Please try again."
         case _:
             pass
 
     incomplete_message = request.query_params.get("incomplete", "")
     match incomplete_message:
+        case "verification_required":
+            incomplete_message = (
+                "Please verify your email address before signing in."
+            )
         case "verify":
             incomplete_message = (
                 "Successfully verified email! Please sign in to continue."

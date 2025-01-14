@@ -20,22 +20,29 @@ class SignUpBody(BaseModel):
     password: str
 
 
+class BaseServerFailedResponse(BaseModel):
+    status_code: int
+    message: str
+
+
 class SignUpCompleteResponse(BaseModel):
-    status: Literal["complete"]
     verifier: str
     token_data: TokenData
     identity_id: uuid.UUID
 
 
 class SignUpVerificationRequiredResponse(BaseModel):
-    status: Literal["verification_required"]
     verifier: str
     token_data: None
     identity_id: uuid.UUID | None
 
 
+class SignUpFailedResponse(BaseServerFailedResponse):
+    verifier: str
+
+
 SignUpResponse = Union[
-    SignUpCompleteResponse, SignUpVerificationRequiredResponse
+    SignUpCompleteResponse, SignUpVerificationRequiredResponse, SignUpFailedResponse
 ]
 
 
@@ -45,21 +52,23 @@ class SignInBody(BaseModel):
 
 
 class SignInCompleteResponse(BaseModel):
-    status: Literal["complete"]
     verifier: str
     token_data: TokenData
     identity_id: uuid.UUID
 
 
 class SignInVerificationRequiredResponse(BaseModel):
-    status: Literal["verification_required"]
     verifier: str
     token_data: None
     identity_id: uuid.UUID | None
 
 
+class SignInFailedResponse(BaseServerFailedResponse):
+    verifier: str
+
+
 SignInResponse = Union[
-    SignInCompleteResponse, SignInVerificationRequiredResponse
+    SignInCompleteResponse, SignInVerificationRequiredResponse, SignInFailedResponse
 ]
 
 
@@ -69,17 +78,21 @@ class VerifyBody(BaseModel):
 
 
 class EmailVerificationCompleteResponse(BaseModel):
-    status: Literal["complete"]
     token_data: TokenData
 
 
 class EmailVerificationMissingProofResponse(BaseModel):
-    status: Literal["missing_proof"]
     token_data: None
 
 
+class EmailVerificationFailedResponse(BaseServerFailedResponse):
+    pass
+
+
 EmailVerificationResponse = Union[
-    EmailVerificationCompleteResponse, EmailVerificationMissingProofResponse
+    EmailVerificationCompleteResponse,
+    EmailVerificationMissingProofResponse,
+    EmailVerificationFailedResponse,
 ]
 
 
@@ -89,8 +102,16 @@ class SendPasswordResetBody(BaseModel):
 
 
 class SendPasswordResetEmailCompleteResponse(BaseModel):
-    status: Literal["complete"]
     verifier: str
+
+
+class SendPasswordResetEmailFailedResponse(BaseServerFailedResponse):
+    pass
+
+
+SendPasswordResetEmailResponse = Union[
+    SendPasswordResetEmailCompleteResponse, SendPasswordResetEmailFailedResponse
+]
 
 
 class PasswordResetBody(BaseModel):
@@ -99,16 +120,21 @@ class PasswordResetBody(BaseModel):
 
 
 class PasswordResetCompleteResponse(BaseModel):
-    status: Literal["complete"]
     token_data: TokenData
 
 
 class PasswordResetMissingProofResponse(BaseModel):
-    status: Literal["missing_proof"]
+    pass
+
+
+class PasswordResetFailedResponse(BaseServerFailedResponse):
+    pass
 
 
 PasswordResetResponse = Union[
-    PasswordResetCompleteResponse, PasswordResetMissingProofResponse
+    PasswordResetCompleteResponse,
+    PasswordResetMissingProofResponse,
+    PasswordResetFailedResponse,
 ]
 
 
@@ -159,7 +185,15 @@ class EmailPassword:
             )
 
             logger.info(f"Register response: {register_response.text}")
-            register_response.raise_for_status()
+            try:
+                register_response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Register error: {e}")
+                return SignUpFailedResponse(
+                    verifier=pkce.verifier,
+                    status_code=e.response.status_code,
+                    message=e.response.text,
+                )
             register_json = register_response.json()
             match register_json:
                 case {"error": error}:
@@ -172,7 +206,6 @@ class EmailPassword:
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     logger.info(f"Token data: {token_data}")
                     return SignUpCompleteResponse(
-                        status="complete",
                         verifier=pkce.verifier,
                         token_data=token_data,
                         identity_id=token_data.identity_id,
@@ -183,7 +216,6 @@ class EmailPassword:
                     )
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     return SignUpVerificationRequiredResponse(
-                        status="verification_required",
                         verifier=pkce.verifier,
                         token_data=None,
                         identity_id=register_json.get("identity_id"),
@@ -205,7 +237,15 @@ class EmailPassword:
             )
 
             logger.info(f"Sign in response: {sign_in_response.text}")
-            sign_in_response.raise_for_status()
+            try:
+                sign_in_response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Sign in error: {e}")
+                return SignInFailedResponse(
+                    verifier=pkce.verifier,
+                    status_code=e.response.status_code,
+                    message=e.response.text,
+                )
             sign_in_json = sign_in_response.json()
             match sign_in_json:
                 case {"error": error}:
@@ -218,7 +258,6 @@ class EmailPassword:
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     logger.info(f"Token data: {token_data}")
                     return SignInCompleteResponse(
-                        status="complete",
                         verifier=pkce.verifier,
                         token_data=token_data,
                         identity_id=token_data.identity_id,
@@ -229,7 +268,6 @@ class EmailPassword:
                     )
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     return SignInVerificationRequiredResponse(
-                        status="verification_required",
                         verifier=pkce.verifier,
                         token_data=None,
                         identity_id=sign_in_json.get("identity_id"),
@@ -248,7 +286,14 @@ class EmailPassword:
                     "provider": "builtin::local_emailpassword",
                 },
             )
-            verify_response.raise_for_status()
+            try:
+                verify_response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Verify error: {e}")
+                return EmailVerificationFailedResponse(
+                    status_code=e.response.status_code,
+                    message=e.response.text,
+                )
             verify_json = verify_response.json()
             match verify_json:
                 case {"error": error}:
@@ -256,9 +301,7 @@ class EmailPassword:
                     raise Exception(f"Verify error: {error}")
                 case {"code": code}:
                     if verifier is None:
-                        return EmailVerificationMissingProofResponse(
-                            status="missing_proof", token_data=None
-                        )
+                        return EmailVerificationMissingProofResponse(token_data=None)
 
                     pkce = PKCE(verifier, base_url=self.auth_ext_url)
                     logger.info(f"Exchanging code for token: {code}")
@@ -267,7 +310,6 @@ class EmailPassword:
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     logger.info(f"Token data: {token_data}")
                     return EmailVerificationCompleteResponse(
-                        status="complete",
                         token_data=token_data,
                     )
                 case _:
@@ -276,7 +318,7 @@ class EmailPassword:
 
     async def send_password_reset_email(
         self, email: str, reset_url: str
-    ) -> SendPasswordResetEmailCompleteResponse:
+    ) -> SendPasswordResetEmailResponse:
         pkce = generate_pkce(self.auth_ext_url)
         async with httpx.AsyncClient() as http_client:
             url = urljoin(self.auth_ext_url, "send-reset-email")
@@ -291,7 +333,14 @@ class EmailPassword:
             )
 
             logger.info(f"Reset response: {reset_response.text}")
-            reset_response.raise_for_status()
+            try:
+                reset_response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Reset error: {e}")
+                return SendPasswordResetEmailFailedResponse(
+                    status_code=e.response.status_code,
+                    message=e.response.text,
+                )
             reset_json = reset_response.json()
             match reset_json:
                 case {"error": error}:
@@ -301,7 +350,6 @@ class EmailPassword:
                     logger.info(f"PKCE verifier: {pkce.verifier}")
                     logger.info(f"Reset response: {reset_json}")
                     return SendPasswordResetEmailCompleteResponse(
-                        status="complete",
                         verifier=pkce.verifier,
                     )
 
@@ -320,7 +368,14 @@ class EmailPassword:
             )
 
             logger.info(f"Reset response: {reset_response.text}")
-            reset_response.raise_for_status()
+            try:
+                reset_response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Reset error: {e}")
+                return PasswordResetFailedResponse(
+                    status_code=e.response.status_code,
+                    message=e.response.text,
+                )
             reset_json = reset_response.json()
             match reset_json:
                 case {"error": error}:
@@ -328,15 +383,12 @@ class EmailPassword:
                     raise Exception(f"Reset error: {error}")
                 case {"code": code}:
                     if verifier is None:
-                        return PasswordResetMissingProofResponse(
-                            status="missing_proof"
-                        )
+                        return PasswordResetMissingProofResponse()
 
                     pkce = PKCE(verifier, base_url=self.auth_ext_url)
                     logger.info(f"Exchanging code for token: {code}")
                     token_data = await pkce.exchange_code_for_token(code)
                     return PasswordResetCompleteResponse(
-                        status="complete",
                         token_data=token_data,
                     )
                 case _:

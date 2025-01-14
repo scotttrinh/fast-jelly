@@ -27,10 +27,13 @@ class EmailPassword:
         sign_up_response = await email_password_client.sign_up(
             sign_up_body.email, sign_up_body.password
         )
-        _set_verifier_cookie(sign_up_response.verifier, response)
-        if sign_up_response.status == "complete":
-            auth_token = sign_up_response.token_data.auth_token
-            _set_auth_cookie(auth_token, response)
+
+        match sign_up_response:
+            case email_password.SignUpCompleteResponse():
+                _set_auth_cookie(sign_up_response.token_data.auth_token, response)
+            case _:
+                _set_verifier_cookie(sign_up_response.verifier, response)
+
         return sign_up_response
 
     async def handle_sign_in(
@@ -47,10 +50,13 @@ class EmailPassword:
         sign_in_response = await email_password_client.sign_in(
             sign_in_body.email, sign_in_body.password
         )
-        _set_verifier_cookie(sign_in_response.verifier, response)
-        if sign_in_response.status == "complete":
-            auth_token = sign_in_response.token_data.auth_token
-            _set_auth_cookie(auth_token, response)
+
+        match sign_in_response:
+            case email_password.SignInCompleteResponse():
+                _set_auth_cookie(sign_in_response.token_data.auth_token, response)
+            case _:
+                _set_verifier_cookie(sign_in_response.verifier, response)
+
         return sign_in_response
 
     async def handle_verify_email(
@@ -69,7 +75,7 @@ class EmailPassword:
         self,
         request: Request,
         response: Response,
-    ) -> email_password.SendPasswordResetEmailCompleteResponse:
+    ) -> email_password.SendPasswordResetEmailResponse:
         email_password_client = await email_password.make(
             client=self.client, verify_url=self.verify_url
         )

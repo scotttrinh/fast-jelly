@@ -18,9 +18,7 @@ from .queries import create_user_async_edgeql as create_user_qry
 
 logger = logging.getLogger("fast_jelly")
 router = APIRouter()
-email_password = make_email_password(
-    client, verify_url=f"{BASE_URL}/auth/verify"
-)
+email_password = make_email_password(client, verify_url=f"{BASE_URL}/auth/verify")
 
 
 @router.post(
@@ -35,7 +33,7 @@ async def register(
     ],
 ):
     logger.info(f"sign_up_response: {sign_up_response}")
-    if sign_up_response.identity_id is not None:
+    if not isinstance(sign_up_response, core_email_password.SignUpFailedResponse):
         user = await create_user_qry.create_user(
             client,
             name=email,
@@ -47,7 +45,10 @@ async def register(
         case core_email_password.SignUpCompleteResponse():
             return "/"
         case core_email_password.SignUpVerificationRequiredResponse():
-            return "/signin?error=verification_required"
+            return "/signin?incomplete=verification_required"
+        case core_email_password.SignUpFailedResponse():
+            logger.error(f"Sign up failed: {sign_up_response}")
+            return "/signin?error=failure"
         case _:
             raise Exception("Invalid sign up response")
 
@@ -66,7 +67,10 @@ async def authenticate(
         case core_email_password.SignInCompleteResponse():
             return "/"
         case core_email_password.SignInVerificationRequiredResponse():
-            return "/signin?error=verification_required"
+            return "/signin?incomplete=verification_required"
+        case core_email_password.SignInFailedResponse():
+            logger.error(f"Sign in failed: {sign_in_response}")
+            return "/signin?error=failure"
         case _:
             raise Exception("Invalid sign in response")
 
@@ -87,6 +91,9 @@ async def verify(
             return "/"
         case core_email_password.EmailVerificationMissingProofResponse():
             return "/signin?incomplete=verify"
+        case core_email_password.EmailVerificationFailedResponse():
+            logger.error(f"Verify email failed: {verify_response}")
+            return "/signin?error=failure"
         case _:
             raise Exception("Invalid verify email response")
 
@@ -98,11 +105,18 @@ async def verify(
 )
 async def send_password_reset(
     send_password_reset_response: Annotated[
-        core_email_password.SendPasswordResetEmailCompleteResponse,
+        core_email_password.SendPasswordResetEmailResponse,
         Depends(email_password.handle_send_password_reset),
     ],
 ):
-    return "/signin?incomplete=password_reset_sent"
+    match send_password_reset_response:
+        case core_email_password.SendPasswordResetEmailCompleteResponse():
+            return "/signin?incomplete=password_reset_sent"
+        case core_email_password.SendPasswordResetEmailFailedResponse():
+            logger.error(f"Send password reset failed: {send_password_reset_response}")
+            return "/signin?error=failure"
+        case _:
+            raise Exception("Invalid send password reset response")
 
 
 @router.post(
@@ -123,5 +137,3 @@ async def reset_password(
             return "/signin?incomplete=reset_password"
         case _:
             raise Exception("Invalid reset password response")
-
-
