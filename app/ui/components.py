@@ -4,11 +4,11 @@ from typing import Optional, Literal, TypedDict, Unpack
 from htmy import Fragment, html, ComponentType, PropertyValue
 
 
-def Heading(*args: ComponentType) -> html.h1:
+def h1(*args: ComponentType) -> html.h1:
     return html.h1(*args, class_="text-3xl font-semibold")
 
 
-def Subheading(*args: ComponentType) -> html.h2:
+def h2(*args: ComponentType) -> html.h2:
     return html.h2(*args, class_="text-2xl")
 
 
@@ -28,7 +28,7 @@ class InputProps(TypedDict, total=False):
     type: str
 
 
-def Input(
+def labeled_input(
     *args: ComponentType,
     name: str,
     class_: Optional[str] = None,
@@ -54,7 +54,7 @@ def Input(
 LINK_STYLE = "text-blue-400 hover:text-blue-300 underline"
 
 
-def Link(
+def link(
     *args: ComponentType,
     href: str,
     class_: Optional[str] = None,
@@ -84,7 +84,7 @@ class ButtonProps(TypedDict, total=False):
     hx_swap: str
 
 
-def Button(
+def button(
     *args: ComponentType,
     variant: ButtonVariant,
     class_: Optional[str] = None,

@@ -11,7 +11,7 @@ from ..users import User
 from ..edgedb_client import client
 from ..queries import get_current_user_async_edgeql as get_current_user_qry
 
-from .components import Heading, head, Input, Button, Link
+from .components import h1, head, labeled_input, button, link
 
 logger = logging.getLogger("fast_jelly")
 router = APIRouter()
@@ -64,7 +64,7 @@ def IndexPage(_: Any, context: Context) -> Component:
             head("Jellyroll"),
             html.body(
                 # Page content: Index page
-                Heading(f"Welcome, {user.name} to Jellyroll"),
+                h1(f"Welcome, {user.name} to Jellyroll"),
                 class_=(
                     "h-screen w-screen flex flex-col items-center justify-center "
                     "gap-4 bg-slate-800 text-white"
@@ -104,7 +104,7 @@ def SignInPage(_: Any, context: Context) -> Component:
             html.body(
                 # Page content: Email and password sign in form
                 html.div(
-                    Heading("Sign in to Jellyroll"),
+                    h1("Sign in to Jellyroll"),
                     html.div(
                         error_message,
                         class_=(
@@ -123,7 +123,7 @@ def SignInPage(_: Any, context: Context) -> Component:
                     ),
                     html.form(
                         html.div(
-                            Input(
+                            labeled_input(
                                 "Email",
                                 name="email",
                                 type="email",
@@ -132,7 +132,7 @@ def SignInPage(_: Any, context: Context) -> Component:
                             class_="mb-4",
                         ),
                         html.div(
-                            Input(
+                            labeled_input(
                                 "Password",
                                 name="password",
                                 type="password",
@@ -141,19 +141,19 @@ def SignInPage(_: Any, context: Context) -> Component:
                             class_="mb-4",
                         ),
                         html.div(
-                            Button(
+                            button(
                                 "Sign in",
                                 type="submit",
                                 variant="primary",
                             ),
-                            Button(
+                            button(
                                 "Sign up",
                                 type="submit",
                                 variant="secondary",
                                 formaction="/auth/register",
                                 formmethod="post",
                             ),
-                            Button(
+                            button(
                                 "Forgot password?",
                                 type="button",
                                 variant="link",
@@ -184,7 +184,7 @@ def ForgotPasswordForm(_: Any, context: Context) -> Component:
 
     return html.form(
         html.div(
-            Input(
+            labeled_input(
                 "Email",
                 name="email",
                 type="email",
@@ -194,12 +194,12 @@ def ForgotPasswordForm(_: Any, context: Context) -> Component:
             class_="mb-4",
         ),
         html.div(
-            Button(
+            button(
                 "Send Reset Link",
                 type="submit",
                 variant="primary",
             ),
-            Link(
+            link(
                 "Back to Sign In",
                 href="/signin",
             ),
@@ -223,10 +223,10 @@ def ResetPasswordPage(_: Any, context: Context) -> Component:
             html.body(
                 # Page content: Reset password page
                 html.div(
-                    Heading("Reset your password"),
+                    h1("Reset your password"),
                     html.form(
                         html.div(
-                            Input(
+                            labeled_input(
                                 "New password",
                                 name="password",
                                 type="password",
@@ -240,7 +240,7 @@ def ResetPasswordPage(_: Any, context: Context) -> Component:
                             value=reset_token,
                         ),
                         html.div(
-                            Button(
+                            button(
                                 "Reset password",
                                 type="submit",
                                 variant="primary",
