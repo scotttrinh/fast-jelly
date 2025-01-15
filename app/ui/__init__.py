@@ -124,8 +124,8 @@ def SignInPage(_: Any, context: Context) -> Component:
                     html.form(
                         html.div(
                             Input(
+                                "Email",
                                 name="email",
-                                label="Email",
                                 type="email",
                                 placeholder="Enter your email",
                             ),
@@ -133,8 +133,8 @@ def SignInPage(_: Any, context: Context) -> Component:
                         ),
                         html.div(
                             Input(
+                                "Password",
                                 name="password",
-                                label="Password",
                                 type="password",
                                 placeholder="Enter your password",
                             ),
@@ -185,7 +185,7 @@ def ForgotPasswordForm(_: Any, context: Context) -> Component:
     return html.form(
         html.div(
             Input(
-                label="Email",
+                "Email",
                 name="email",
                 type="email",
                 value=email,
@@ -227,7 +227,7 @@ def ResetPasswordPage(_: Any, context: Context) -> Component:
                     html.form(
                         html.div(
                             Input(
-                                label="New password",
+                                "New password",
                                 name="password",
                                 type="password",
                                 placeholder="Enter your password",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Literal
+from typing import Optional, Literal, TypedDict, Unpack
 from htmy import Fragment, html, ComponentType, PropertyValue
 
 
@@ -22,27 +22,31 @@ def head(title: str) -> ComponentType:
     )
 
 
+class InputProps(TypedDict, total=False):
+    placeholder: str
+    value: str
+    type: str
+
+
 def Input(
-    *,
-    label: str,
+    *args: ComponentType,
     name: str,
-    type: str,
     class_: Optional[str] = None,
-    **kwargs: PropertyValue,
+    **kwargs: Unpack[InputProps],
 ) -> Fragment:
     merged_class_ = f"w-full border border-slate-600 bg-slate-800 text-white rounded-md p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 {class_ if class_ else ''}"
+
     return Fragment(
         html.label(
-            label,
+            *args,
             for_=name,
             class_="block text-sm font-medium text-slate-300 mb-1 pl-2",
         ),
         html.input_(
-            **kwargs,
             name=name,
             id=name,
-            type=type,
             class_=merged_class_,
+            **kwargs,
         ),
     )
 
@@ -70,11 +74,21 @@ _variant_classes: dict[ButtonVariant, str] = {
 }
 
 
+class ButtonProps(TypedDict, total=False):
+    type: str
+    formaction: str
+    formmethod: str
+    hx_get: str
+    hx_include: str
+    hx_target: str
+    hx_swap: str
+
+
 def Button(
     *args: ComponentType,
     variant: ButtonVariant,
     class_: Optional[str] = None,
-    **kwargs: PropertyValue,
+    **kwargs: Unpack[ButtonProps],
 ) -> html.button:
     merged_class_ = f"{_variant_classes[variant]} {class_ if class_ else ''}"
 
