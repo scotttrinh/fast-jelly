@@ -7,6 +7,7 @@ from fastapi import Response, Request, Query, Cookie
 
 from auth_core import email_password
 
+
 class EmailPassword:
     def __init__(
         self,

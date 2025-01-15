@@ -17,6 +17,7 @@ class BaseSession:
             "select exists ext::auth::ClientTokenIdentity"
         )
 
+
 class AuthenticatedSession(BaseSession):
     auth_token: str
 

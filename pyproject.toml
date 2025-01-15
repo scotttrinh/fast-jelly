@@ -18,7 +18,7 @@ uvicorn = "^0.32.1"
 mypy = "^1.13.0"
 httpx = "^0.28.1"
 pyjwt = "^2.10.1"
-htmy = "^0.3.6"
+htmy = "^0.4.2"
 fasthx = {extras = ["htmy"], version = "^2.1.1"}
 logging = "^0.4.9.6"
 
@@ -26,3 +26,8 @@ logging = "^0.4.9.6"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+exclude = [
+    "app/queries"
+]
