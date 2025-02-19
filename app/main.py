@@ -1,20 +1,31 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
-from starlette.middleware.cors import CORSMiddleware
+import logging
+import sys
 
-from app import users, events
+from fastapi import FastAPI, APIRouter
 
+from app import auth, users, events, ui
+
+
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setFormatter(formatter)
+
+logger = logging.getLogger("fast_jelly")
+logger.setLevel(logging.DEBUG)
+logger.addHandler(stream_handler)
+
+auth_core_logger = logging.getLogger("gel_auth_core")
+auth_core_logger.setLevel(logging.DEBUG)
+auth_core_logger.addHandler(stream_handler)
 
 fast_api = FastAPI()
+fast_api.include_router(ui.router)
+fast_api.include_router(auth.router)
 
-fast_api.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+api_router = APIRouter()
+api_router.include_router(users.router)
+api_router.include_router(events.router)
 
-fast_api.include_router(users.router)
-fast_api.include_router(events.router)
+fast_api.include_router(api_router, prefix="/api")
